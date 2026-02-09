@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Local env
+.env
+
+# Data (do not commit LANL dataset)
+data/raw/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+.terraform.lock.hcl

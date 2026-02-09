@@ -1,0 +1,9 @@
+app:
+  env: prod
+
+kinesis:
+  stream_name: authpulse-prod-stream
+  region: us-east-1
+
+producer:
+  rate_events_per_sec: 5000

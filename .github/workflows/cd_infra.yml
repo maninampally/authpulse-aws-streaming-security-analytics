@@ -1,0 +1,19 @@
+name: cd-infra
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init (dev)
+        run: |
+          cd infra/terraform/envs/dev
+          terraform init
+      - name: Terraform Plan (dev)
+        run: |
+          cd infra/terraform/envs/dev
+          terraform plan

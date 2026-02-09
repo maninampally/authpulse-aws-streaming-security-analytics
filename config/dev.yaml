@@ -1,0 +1,9 @@
+app:
+  env: dev
+
+kinesis:
+  stream_name: authpulse-dev-stream
+  region: us-east-1
+
+producer:
+  rate_events_per_sec: 2000

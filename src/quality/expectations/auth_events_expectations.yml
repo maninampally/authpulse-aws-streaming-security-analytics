@@ -1,0 +1,9 @@
+suite_name: auth_events_expectations
+expectations:
+  - expectation_type: expect_table_columns_to_match_ordered_list
+    kwargs:
+      column_list:
+        - event_time
+        - user_id
+        - computer_id
+        - event_id

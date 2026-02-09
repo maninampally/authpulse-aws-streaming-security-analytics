@@ -292,16 +292,81 @@ CloudWatch alarms trigger SNS alerts on violations.
 ```
 authpulse-aws-streaming-security-analytics/
   README.md
+  pyproject.toml
+
   architecture/
-    diagram.png
-  data/raw/
-  infra/terraform/
-  src/producer/
-  src/stream/
-  src/batch/
-  src/quality/
+    architecture-diagram.png
+    system-overview.md
+    dataflow-sequence.md
+
+  config/
+    dev.yaml
+    prod.yaml
+    logging.yaml
+
+  data/
+    raw/                                 # LANL dataset (gitignored)
+    sample/                              # tiny samples for tests / docs
+
+  infra/
+    terraform/
+      envs/
+        dev/
+          main.tf
+          variables.tf
+        prod/
+          main.tf
+          variables.tf
+      modules/
+        kinesis/
+        s3/
+        kda_flink/
+        glue_iceberg/
+        monitoring/
+        iam/
+
+  src/
+    common/
+    producer/
+    stream/
+      flink/
+      spark/
+    batch/
+      ddl/
+      jobs/
+    quality/
+      expectations/
+      dq_reports/
+
+  observability/
+    cloudwatch_dashboards.json
+    alarms/
+    logs/
+
   dashboards/
+    quicksight_setup.md
+    kpi_definitions.md
+
+  ci-cd/
+    github-actions/
+    tests/
+      unit/
+      integration/
+
   notebooks/
+    exploration.ipynb
+    threshold_tuning.ipynb
+
+  scripts/
+    setup_env.sh
+    run_local_stack.sh
+    load_sample_to_kinesis.sh
+
+  docs/
+    design_decisions.md
+    sla_definition.md
+    runbook_operations.md
+    faq_interview.md
 ```
 
 ---
