@@ -3,15 +3,6 @@ AuthPulse - PySpark Schema Definitions
 Defines structured schemas for raw events, enriched events, and aggregations.
 """
 
-from pyspark.sql.types import (
-    ArrayType,
-    IntegerType,
-    LongType,
-    StringType,
-    StructField,
-    StructType,
-    TimestampType,
-)
 
 # TODO: Define RAW_AUTH_EVENT_SCHEMA
 # TODO: Define ENRICHED_EVENT_SCHEMA

@@ -13,8 +13,6 @@ Risk Scoring:
 - Final score mapped to risk level: LOW, MEDIUM, HIGH, CRITICAL
 """
 
-from pyspark.sql import DataFrame
-
 # TODO: Implement detect_new_device()
 # TODO: Implement detect_burst_login()
 # TODO: Implement detect_lateral_movement()

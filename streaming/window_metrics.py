@@ -12,8 +12,6 @@ Metrics:
 - seen_computers: All historical computers (stateful tracking)
 """
 
-from pyspark.sql import DataFrame
-
 # TODO: Implement compute_rolling_windows()
 # TODO: Implement compute_stateful_aggregates()
 # TODO: Implement aggregate_user_behavior_hourly()
