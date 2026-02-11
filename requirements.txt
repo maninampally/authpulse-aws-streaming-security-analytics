@@ -1,0 +1,27 @@
+# AuthPulse - Python Dependencies
+
+# AWS SDK
+boto3>=1.34.0
+botocore>=1.34.0
+
+# Data processing
+pandas>=2.1.0
+pyarrow>=14.0.0
+
+# PySpark (EMR provides runtime, this is for local dev/testing)
+pyspark>=3.5.0
+
+# Configuration
+pyyaml>=6.0.1
+python-decouple>=3.8
+
+# Logging
+python-json-logger>=2.0.7
+
+# Testing
+pytest>=7.4.0
+moto>=4.2.0
+
+# Code quality
+ruff>=0.1.0
+black>=23.0.0
