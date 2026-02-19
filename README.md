@@ -397,6 +397,19 @@ cd authpulse-aws-streaming-security-analytics
 pip install -r requirements.txt
 ```
 
+### Local Development (Windows)
+
+```powershell
+# Create venv + install dev deps
+./scripts/setup_env.ps1
+
+# Run lint + unit tests
+./scripts/run_tests.ps1
+
+# Run lint/tests, stage changes, and commit
+./scripts/commit.ps1 -All -Message "chore: update docs"
+```
+
 ---
 
 ## 💻 Usage
