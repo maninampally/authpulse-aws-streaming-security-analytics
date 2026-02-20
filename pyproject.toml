@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "moto>=5.0",
   "pytest>=8.0",
   "ruff>=0.6",
 ]
@@ -25,7 +26,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["common*", "producer*", "stream*", "batch*", "quality*"]
+include = ["common*", "producer*", "stream*", "batch*", "quality*", "ingest*"]
 
 [tool.ruff]
 line-length = 100
