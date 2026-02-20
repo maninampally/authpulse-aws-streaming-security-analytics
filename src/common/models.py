@@ -30,6 +30,13 @@ class AuthEvent(BaseModel):
         return value
 
 
-def parse_lanl_record(time_s: str, user: str, computer: str, event_id: str) -> AuthEvent:
+def parse_lanl_record(
+    time_s: str,
+    user: str,
+    computer: str,
+    event_id: str,
+    raw_line: str | None = None,
+) -> AuthEvent:
+    _ = raw_line
     ts = datetime.fromtimestamp(int(time_s), tz=timezone.utc)
     return AuthEvent(event_time=ts, user_id=user, computer_id=computer, event_id=event_id)

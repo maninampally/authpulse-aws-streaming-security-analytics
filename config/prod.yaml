@@ -1,9 +1,19 @@
 app:
   env: prod
 
+aws:
+  region: us-east-1
+  profile: default
+
 kinesis:
   stream_name: authpulse-prod-stream
   region: us-east-1
+  partition_key_field: user_id
+
+replay:
+  input_path: data/raw/lanl_auth_full.txt
+  batch_size: 500
+  sleep_interval_ms: 0
 
 producer:
   rate_events_per_sec: 5000

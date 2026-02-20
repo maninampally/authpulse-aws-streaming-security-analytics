@@ -1,9 +1,19 @@
 app:
   env: dev
 
+aws:
+  region: us-east-1
+  profile: default
+
 kinesis:
   stream_name: authpulse-dev-stream
   region: us-east-1
+  partition_key_field: user_id
+
+replay:
+  input_path: data/sample/auth_sample.csv
+  batch_size: 500
+  sleep_interval_ms: 0
 
 producer:
   rate_events_per_sec: 2000
