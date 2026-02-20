@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 
+from common.logging_utils import get_logger
 
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
