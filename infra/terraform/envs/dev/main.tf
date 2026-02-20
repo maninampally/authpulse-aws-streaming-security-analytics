@@ -16,3 +16,16 @@ module "s3" {
   bucket_name = var.lakehouse_bucket_name
   tags        = var.tags
 }
+
+module "iam" {
+  source = "../../modules/iam"
+
+  name_prefix        = "authpulse-dev"
+  kinesis_stream_arn = module.kinesis.stream_arn
+  s3_bucket_arn      = module.s3.bucket_arn
+
+  create_role      = var.create_iam_role
+  trusted_services = var.iam_trusted_services
+
+  tags = var.tags
+}

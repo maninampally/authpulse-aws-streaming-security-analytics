@@ -13,3 +13,11 @@ output "lakehouse_bucket_name" {
 output "lakehouse_bucket_arn" {
   value = module.s3.bucket_arn
 }
+
+output "iam_policy_arn" {
+  value = module.iam.policy_arn
+}
+
+output "iam_role_arn" {
+  value = module.iam.role_arn
+}

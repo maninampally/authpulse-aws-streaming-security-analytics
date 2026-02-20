@@ -29,4 +29,5 @@ data/raw/
 *.tfstate
 *.tfstate.*
 crash.log
-.terraform.lock.hcl
+tfplan
+tfplan.*

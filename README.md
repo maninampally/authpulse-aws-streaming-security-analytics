@@ -43,6 +43,24 @@ LANL Dataset → Kinesis Streams → PySpark on EMR → S3 Iceberg Tables → At
 
 ---
 
+## 🧱 Terraform (Dev Infra)
+
+Terraform lives in `infra/terraform` and is composed per-environment under `infra/terraform/envs/*`.
+
+For Windows/PowerShell, use the repo wrapper (auto-finds Terraform, runs init/fmt/validate/plan):
+
+- Plan dev: `./scripts/terraform.ps1 -Env dev -Action plan`
+- Apply dev: `./scripts/terraform.ps1 -Env dev -Action apply`
+
+If you use multiple AWS accounts, target a specific AWS CLI profile:
+
+- Plan dev (profile): `./scripts/terraform.ps1 -Env dev -Action plan -AwsProfile <profile>`
+- Apply dev (profile): `./scripts/terraform.ps1 -Env dev -Action apply -AwsProfile <profile>`
+
+Note: `terraform apply` creates AWS resources (costs possible).
+
+---
+
 ## 🎯 Business Problem
 
 Security teams need **real-time visibility** into authentication behavior to detect risky patterns:

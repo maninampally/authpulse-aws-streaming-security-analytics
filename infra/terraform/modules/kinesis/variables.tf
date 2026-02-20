@@ -15,11 +15,17 @@ variable "retention_hours" {
 variable "encryption_type" {
   type    = string
   default = "KMS"
+
+  validation {
+    condition     = contains(["KMS", "NONE"], var.encryption_type)
+    error_message = "encryption_type must be one of: KMS, NONE."
+  }
 }
 
 variable "kms_key_id" {
   type    = string
-  default = null
+  description = "KMS key ID/ARN/alias to use when encryption_type=KMS. Defaults to the AWS-managed key alias for Kinesis."
+  default = "alias/aws/kinesis"
 }
 
 variable "tags" {
