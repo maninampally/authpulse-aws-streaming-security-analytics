@@ -17,3 +17,12 @@ replay:
 
 producer:
   rate_events_per_sec: 2000
+
+athena:
+  workgroup: primary
+  output_s3: s3://authpulse-dev-raw/athena-results/
+
+dq:
+  # Optional: if set, JSON DQ reports are uploaded to S3.
+  # Example: s3://authpulse-dev-curated/dq_reports/
+  s3_reports_prefix: ""
