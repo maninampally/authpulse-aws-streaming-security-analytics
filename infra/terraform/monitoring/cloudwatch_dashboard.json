@@ -1,0 +1,142 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Kinesis Iterator Age (ms)",
+        "metrics": [
+          [
+            "AWS/Kinesis",
+            "GetRecords.IteratorAgeMilliseconds",
+            "StreamName",
+            "__STREAM_NAME__",
+            { "stat": "Maximum", "period": 60 }
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 0,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Kinesis Incoming Records (records/min)",
+        "metrics": [
+          [
+            "AWS/Kinesis",
+            "IncomingRecords",
+            "StreamName",
+            "__STREAM_NAME__",
+            { "stat": "Sum", "period": 60 }
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Managed Flink: Failed Checkpoints",
+        "metrics": [
+          [
+            "__FLINK_NAMESPACE__",
+            "numberOfFailedCheckpoints",
+            "Application",
+            "__FLINK_APP_NAME__",
+            { "stat": "Sum", "period": 60 }
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 6,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Managed Flink: Records In/Out",
+        "metrics": [
+          [
+            "__FLINK_NAMESPACE__",
+            "numRecordsIn",
+            "Application",
+            "__FLINK_APP_NAME__",
+            { "stat": "Sum", "period": 60 }
+          ],
+          [
+            "__FLINK_NAMESPACE__",
+            "numRecordsOut",
+            "Application",
+            "__FLINK_APP_NAME__",
+            { "stat": "Sum", "period": 60 }
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "DQ: Invalid Record Percent",
+        "metrics": [
+          [
+            "Authpulse/DQ",
+            "InvalidRecordPercent",
+            { "stat": "Maximum", "period": 300 }
+          ]
+        ],
+        "yAxis": {
+          "left": { "min": 0, "max": 5 }
+        }
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "Replay Producer: Events/sec (optional)",
+        "metrics": [
+          [
+            "Authpulse/Producer",
+            "EventsPerSecond",
+            { "stat": "Average", "period": 60 }
+          ]
+        ]
+      }
+    }
+  ]
+}

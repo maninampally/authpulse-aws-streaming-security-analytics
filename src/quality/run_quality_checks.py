@@ -337,6 +337,82 @@ def run_suite(*, config_path: str, suite_path: str) -> dict[str, Any]:
     return payload
 
 
+def _compute_invalid_record_stats(report: dict[str, Any]) -> tuple[float, int, int]:
+    checks = report.get("checks", [])
+    if not isinstance(checks, list):
+        return 0.0, 0, int(report.get("total_rows", 0) or 0)
+
+    total_rows = int(report.get("total_rows", 0) or 0)
+
+    pcts: list[float] = []
+    failed_rows: list[int] = []
+    for chk in checks:
+        if not isinstance(chk, dict):
+            continue
+        # Schema checks are not row-level; exclude them from "invalid record %".
+        if str(chk.get("type", "")) == "schema":
+            continue
+        try:
+            pcts.append(float(chk.get("failure_pct", 0.0)))
+            failed_rows.append(int(chk.get("failed_rows", 0) or 0))
+        except Exception:  # noqa: BLE001
+            continue
+    invalid_percent = float(max(pcts) if pcts else 0.0)
+    invalid_rows_est = int(max(failed_rows) if failed_rows else 0)
+    return invalid_percent, invalid_rows_est, total_rows
+
+
+def _emit_dq_invalid_percent_log_line(
+    *,
+    report: dict[str, Any],
+    invalid_record_percent: float,
+    invalid_rows_estimate: int,
+    total_rows: int,
+) -> None:
+    # Designed for CloudWatch Logs metric filters.
+    print(
+        json.dumps(
+            {
+                "metric": "dq_invalid_record_percent",
+                "value": float(round(invalid_record_percent, 6)),
+                "count": int(invalid_rows_estimate),
+                "total": int(total_rows),
+                "table": report.get("table"),
+                "run_ts_utc": report.get("run_ts_utc"),
+            }
+        )
+    )
+
+
+def _maybe_put_cloudwatch_metric(
+    *,
+    config: dict[str, Any],
+    settings: AthenaSettings,
+    invalid_record_percent: float,
+) -> None:
+    emit = bool(_get_nested(config, ["dq", "emit_cloudwatch_metrics"], False))
+    if not emit:
+        return
+
+    namespace = str(_get_nested(config, ["dq", "cloudwatch_namespace"], "Authpulse/DQ"))
+    metric_name = str(
+        _get_nested(config, ["dq", "invalid_percent_metric_name"], "InvalidRecordPercent")
+    )
+
+    session = _boto3_session(region=settings.region, profile=settings.profile)
+    cw = session.client("cloudwatch")
+    cw.put_metric_data(
+        Namespace=namespace,
+        MetricData=[
+            {
+                "MetricName": metric_name,
+                "Unit": "Percent",
+                "Value": float(invalid_record_percent),
+            }
+        ],
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run YAML-driven DQ checks via Athena")
     parser.add_argument(
@@ -356,6 +432,24 @@ def main() -> None:
         raise FileNotFoundError(str(suite_path))
 
     report = run_suite(config_path=str(args.config), suite_path=str(suite_path))
+
+    # Emit a single, consistent metric line so infra can attach log metric filters.
+    invalid_record_percent, invalid_rows_estimate, total_rows = _compute_invalid_record_stats(report)
+    _emit_dq_invalid_percent_log_line(
+        report=report,
+        invalid_record_percent=invalid_record_percent,
+        invalid_rows_estimate=invalid_rows_estimate,
+        total_rows=total_rows,
+    )
+
+    # Optional: publish custom metric directly (requires cloudwatch:PutMetricData permissions).
+    cfg = _load_yaml(str(args.config))
+    settings = load_athena_settings(config_path=str(args.config))
+    _maybe_put_cloudwatch_metric(
+        config=cfg,
+        settings=settings,
+        invalid_record_percent=invalid_record_percent,
+    )
 
     failures = [c for c in report["checks"] if c["status"] == "FAIL"]
     if failures:
