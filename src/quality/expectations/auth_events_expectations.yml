@@ -1,9 +1,36 @@
-suite_name: auth_events_expectations
-expectations:
-  - expectation_type: expect_table_columns_to_match_ordered_list
-    kwargs:
-      column_list:
-        - event_time
-        - user_id
-        - computer_id
-        - event_id
+table: lakehouse.auth_events_curated
+failure_threshold_pct: 0.1
+checks:
+  - name: schema_columns
+    type: schema
+    expected_columns:
+      - event_time: timestamp
+      - user_id: string
+      - src_host: string
+      - dst_host: string
+      - success: boolean
+      - window_1h_event_count: bigint
+      - window_1h_unique_hosts: bigint
+      - window_24h_unique_hosts: bigint
+      - has_new_device: boolean
+      - risk_score: int
+      - risk_flags: array<string>
+
+  - name: not_null_user_id
+    type: not_null
+    column: user_id
+
+  - name: not_null_event_time
+    type: not_null
+    column: event_time
+
+  - name: value_range_risk_score
+    type: range
+    column: risk_score
+    min: 0
+    max: 100
+
+  - name: allowed_values_success
+    type: range
+    column: success
+    allowed_values: [true, false]
