@@ -48,6 +48,11 @@ def _build_kinesis_source_ddl(*, table_name: str, stream_name: str, region: str,
             "  time_s STRING",
             "  ,user STRING",
             "  ,computer STRING",
+            "  ,event_time AS TO_TIMESTAMP_LTZ(CAST(time_s AS BIGINT) * 1000, 3)",
+            "  ,user_id AS user",
+            "  ,computer_id AS computer",
+            "  ,event_id AS CONCAT(time_s, '-', user, '-', computer)",
+            "  ,WATERMARK FOR event_time AS event_time - INTERVAL '5' SECOND",
             ") WITH (",
             common_with + ",",
             "  'format' = 'csv',",
@@ -81,6 +86,28 @@ def _build_s3_sink_ddl(*, table_name: str, s3_path: str) -> str:
     )
 
 
+def _build_user_features_sink_ddl(*, table_name: str, s3_path: str) -> str:
+    return "\n".join(
+        [
+            f"CREATE TABLE {table_name} (",
+            "  window_start TIMESTAMP(3)",
+            "  ,window_end TIMESTAMP(3)",
+            "  ,user_id STRING",
+            "  ,window_size STRING",
+            "  ,unique_hosts BIGINT",
+            "  ,event_count BIGINT",
+            "  ,has_new_device BOOLEAN",
+            ") PARTITIONED BY (window_size) WITH (",
+            "  'connector' = 'filesystem',",
+            f"  'path' = '{s3_path}',",
+            "  'format' = 'json',",
+            "  'sink.partition-commit.policy.kind' = 'success-file',",
+            "  'sink.partition-commit.delay' = '1 min'",
+            ")",
+        ]
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AuthPulse Flink raw sink job")
     parser.add_argument(
@@ -104,12 +131,21 @@ def main() -> None:
         default=_env("AUTHPULSE_S3_RAW_PATH", "s3a://authpulse-dev-raw/raw/auth_events"),
         help="S3 path for raw sink (e.g., s3a://bucket/prefix)",
     )
+    parser.add_argument(
+        "--s3-features-path",
+        default=_env(
+            "AUTHPULSE_S3_FEATURES_PATH",
+            "s3a://authpulse-dev-curated/auth_user_features/",
+        ),
+        help="S3 path for user behavior feature sink (e.g., s3a://bucket/prefix)",
+    )
     args = parser.parse_args()
 
     kinesis_stream = str(args.kinesis_stream).strip()
     aws_region = str(args.aws_region).strip()
     source_format: Literal["json", "csv"] = args.source_format
     s3_raw_path = str(args.s3_raw_path).strip()
+    s3_features_path = str(args.s3_features_path).strip()
 
     if not kinesis_stream:
         raise SystemExit("Missing --kinesis-stream")
@@ -117,17 +153,21 @@ def main() -> None:
         raise SystemExit("Missing --aws-region")
     if not s3_raw_path:
         raise SystemExit("Missing --s3-raw-path")
+    if not s3_features_path:
+        raise SystemExit("Missing --s3-features-path")
 
     try:
-        from pyflink.table import EnvironmentSettings, TableEnvironment  # type: ignore
+        from pyflink.datastream import StreamExecutionEnvironment  # type: ignore
+        from pyflink.table import EnvironmentSettings, StreamTableEnvironment  # type: ignore
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(
             "pyflink is required to run this job. "
             "On AWS Managed Service for Apache Flink, the runtime provides it."
         ) from exc
 
+    env = StreamExecutionEnvironment.get_execution_environment()
     env_settings = EnvironmentSettings.in_streaming_mode()
-    t_env = TableEnvironment.create(env_settings)
+    t_env = StreamTableEnvironment.create(env, environment_settings=env_settings)
 
     cfg = t_env.get_config().get_configuration()
     cfg.set_string("pipeline.name", "authpulse-flink-raw-sink")
@@ -135,7 +175,9 @@ def main() -> None:
     cfg.set_string("execution.checkpointing.min-pause", "10s")
 
     source_table = "kinesis_source"
+    auth_events_view = "auth_events_src"
     sink_table = "s3_raw_sink"
+    features_sink_table = "auth_user_features"
 
     t_env.execute_sql(
         _build_kinesis_source_ddl(
@@ -145,40 +187,60 @@ def main() -> None:
             fmt=source_format,
         )
     )
-    t_env.execute_sql(_build_s3_sink_ddl(table_name=sink_table, s3_path=s3_raw_path))
 
-    if source_format == "json":
-        insert_sql = "\n".join(
+    # Canonical view used by both raw and feature pipelines.
+    t_env.execute_sql(
+        "\n".join(
             [
-                f"INSERT INTO {sink_table}",
+                f"CREATE TEMPORARY VIEW {auth_events_view} AS",
                 "SELECT",
                 "  event_time,",
                 "  user_id,",
                 "  computer_id,",
-                "  event_id,",
-                "  DATE_FORMAT(event_time, 'yyyy-MM-dd') AS event_date",
+                "  event_id",
                 f"FROM {source_table}",
+                "WHERE user_id IS NOT NULL AND user_id <> ''",
+                "  AND computer_id IS NOT NULL AND computer_id <> ''",
+                "  AND event_time IS NOT NULL",
             ]
         )
-    else:
-        # Convert LANL epoch seconds to TIMESTAMP_LTZ and shape to AuthEvent.
-        insert_sql = "\n".join(
-            [
-                f"INSERT INTO {sink_table}",
-                "SELECT",
-                "  TO_TIMESTAMP_LTZ(CAST(time_s AS BIGINT) * 1000, 3) AS event_time,",
-                "  user AS user_id,",
-                "  computer AS computer_id,",
-                "  CONCAT(time_s, '-', user, '-', computer) AS event_id,",
-                "  DATE_FORMAT(TO_TIMESTAMP_LTZ(CAST(time_s AS BIGINT) * 1000, 3), 'yyyy-MM-dd') AS event_date",
-                f"FROM {source_table}",
-                "WHERE time_s IS NOT NULL AND time_s <> ''",
-            ]
-        )
+    )
+
+    t_env.execute_sql(_build_s3_sink_ddl(table_name=sink_table, s3_path=s3_raw_path))
+    t_env.execute_sql(
+        _build_user_features_sink_ddl(table_name=features_sink_table, s3_path=s3_features_path)
+    )
+
+    # Raw event sink (schema normalized for json/csv via computed columns in the source DDL).
+    raw_insert_sql = "\n".join(
+        [
+            f"INSERT INTO {sink_table}",
+            "SELECT",
+            "  event_time,",
+            "  user_id,",
+            "  computer_id,",
+            "  event_id,",
+            "  DATE_FORMAT(event_time, 'yyyy-MM-dd') AS event_date",
+            f"FROM {auth_events_view}",
+        ]
+    )
+
+    # Day 6: user behavior features (stateful new-device detection + window aggregates).
+    from stream.state_manager import (  # local import: keeps pyflink optional for unit tests
+        build_insert_user_features_sql,
+        ensure_user_behavior_feature_views,
+    )
+
+    features_view = ensure_user_behavior_feature_views(t_env, auth_events_table=auth_events_view)
+    features_insert_sql = build_insert_user_features_sql(
+        features_view=features_view,
+        sink_table=features_sink_table,
+    )
 
     # Start streaming pipeline
     stmt_set = t_env.create_statement_set()
-    stmt_set.add_insert_sql(insert_sql)
+    stmt_set.add_insert_sql(raw_insert_sql)
+    stmt_set.add_insert_sql(features_insert_sql)
     stmt_set.execute().wait()
 
 
