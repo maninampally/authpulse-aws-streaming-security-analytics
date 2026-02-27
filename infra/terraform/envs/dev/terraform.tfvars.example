@@ -1,0 +1,35 @@
+# Copy this file to terraform.tfvars and fill in real values before running `terraform apply`.
+# terraform.tfvars is gitignored; this example file is safe to commit.
+
+# ── Core ────────────────────────────────────────────────────────────────────
+aws_region            = "us-east-1"
+kinesis_stream_name   = "authpulse-dev-stream"
+lakehouse_bucket_name = "authpulse-dev-lakehouse-289591071327"
+
+# ── IAM ─────────────────────────────────────────────────────────────────────
+create_iam_role      = true
+iam_trusted_services = ["ec2.amazonaws.com", "kinesisanalytics.amazonaws.com"]
+
+# ── Flink (Managed Service for Apache Flink) ────────────────────────────────
+flink_application_name           = "authpulse-dev-flink-app"
+flink_metrics_namespace          = "AWS/KinesisAnalytics"
+flink_application_dimension_name = "Application"
+# Upload the packaged job to S3 before terraform apply:
+#   aws s3 cp path/to/authpulse-flink-job.zip s3://authpulse-dev-lakehouse-289591071327/flink-app/authpulse-flink-job.zip
+flink_app_s3_key     = "flink-app/authpulse-flink-job.zip"
+flink_source_format  = "json"   # json (AuthEvent) or csv (raw LANL time,user,computer)
+
+# ── Monitoring / SNS ────────────────────────────────────────────────────────
+# REQUIRED: replace with a real address; AWS will send a confirmation email.
+# The SNS subscription stays in PendingConfirmation until you click the link.
+alert_email = "you@yourorg.com"
+
+# ── Optional alarms ─────────────────────────────────────────────────────────
+enable_incoming_records_low_alarm = false
+incoming_records_low_threshold    = 1
+
+# ── DQ log metric filter ─────────────────────────────────────────────────────
+# Set to true only after the Flink/DQ log group exists in CloudWatch.
+enable_dq_log_metric_filter = false
+dq_log_group_name           = "/authpulse/dev/dq"
+dq_log_retention_days       = 30

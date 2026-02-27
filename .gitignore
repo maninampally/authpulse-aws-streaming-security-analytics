@@ -32,3 +32,5 @@ data/raw/
 crash.log
 tfplan
 tfplan.*
+*.tfvars
+!*.tfvars.example

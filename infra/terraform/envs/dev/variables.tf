@@ -86,3 +86,21 @@ variable "dq_log_retention_days" {
   description = "Retention in days for the optional DQ log group."
   default     = 30
 }
+
+variable "glue_database_name" {
+  type        = string
+  description = "Glue catalog database name for Iceberg tables."
+  default     = "authpulse"
+}
+
+variable "flink_app_s3_key" {
+  type        = string
+  description = "S3 object key for the packaged Flink job (ZIP/JAR). Must be uploaded before terraform apply."
+  default     = "flink-app/authpulse-flink-job.zip"
+}
+
+variable "flink_source_format" {
+  type        = string
+  description = "Input record format the Flink job reads from Kinesis: json or csv."
+  default     = "json"
+}

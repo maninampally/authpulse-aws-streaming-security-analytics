@@ -142,7 +142,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="AuthPulse Flink raw sink job")
     parser.add_argument(
         "--kinesis-stream",
-        default=_env("AUTHPULSE_KINESIS_STREAM", "authpulse-dev-auth-stream"),
+        default=_env("AUTHPULSE_KINESIS_STREAM", "authpulse-dev-stream"),
         help="Kinesis Data Stream name",
     )
     parser.add_argument(
@@ -158,14 +158,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--s3-raw-path",
-        default=_env("AUTHPULSE_S3_RAW_PATH", "s3a://authpulse-dev-raw/raw/auth_events"),
+        default=_env("AUTHPULSE_S3_RAW_PATH", "s3a://authpulse-dev-lakehouse-289591071327/raw/auth_events"),
         help="S3 path for raw sink (e.g., s3a://bucket/prefix)",
     )
     parser.add_argument(
         "--s3-features-path",
         default=_env(
             "AUTHPULSE_S3_FEATURES_PATH",
-            "s3a://authpulse-dev-curated/auth_user_features/",
+            "s3a://authpulse-dev-lakehouse-289591071327/features/auth_user_features/",
         ),
         help="S3 path for user behavior feature sink (e.g., s3a://bucket/prefix)",
     )
@@ -173,7 +173,7 @@ def main() -> None:
         "--s3-curated-events-path",
         default=_env(
             "AUTHPULSE_S3_CURATED_EVENTS_PATH",
-            "s3a://authpulse-dev-curated/auth_events_curated/",
+            "s3a://authpulse-dev-lakehouse-289591071327/curated/auth_events_curated/",
         ),
         help="S3 path for curated risk-enriched events sink (e.g., s3a://bucket/prefix)",
     )

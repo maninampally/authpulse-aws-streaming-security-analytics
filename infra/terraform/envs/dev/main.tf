@@ -30,6 +30,30 @@ module "iam" {
   tags = var.tags
 }
 
+module "glue_iceberg" {
+  source = "../../modules/glue_iceberg"
+
+  database_name         = var.glue_database_name
+  lakehouse_bucket_name = var.lakehouse_bucket_name
+  tags                  = var.tags
+}
+
+module "kda_flink" {
+  source = "../../modules/kda_flink"
+
+  application_name           = var.flink_application_name
+  service_execution_role_arn = module.iam.role_arn
+  app_s3_bucket_arn          = module.s3.bucket_arn
+  app_s3_key                 = var.flink_app_s3_key
+
+  kinesis_stream_name   = var.kinesis_stream_name
+  aws_region            = var.aws_region
+  lakehouse_bucket_name = var.lakehouse_bucket_name
+  source_format         = var.flink_source_format
+
+  tags = var.tags
+}
+
 module "monitoring" {
   source = "../../modules/monitoring"
 
