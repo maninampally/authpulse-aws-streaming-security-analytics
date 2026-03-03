@@ -2,17 +2,18 @@
 ### Production-Grade AWS Streaming Lakehouse for Security Analytics
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![PySpark](https://img.shields.io/badge/PySpark-3.5+-orange.svg)](https://spark.apache.org/)
+[![Apache Flink](https://img.shields.io/badge/Apache%20Flink-1.18+-purple.svg)](https://flink.apache.org/)
 [![Apache Iceberg](https://img.shields.io/badge/Apache%20Iceberg-1.4+-blue.svg)](https://iceberg.apache.org/)
-[![AWS](https://img.shields.io/badge/AWS-Kinesis%20%7C%20EMR%20%7C%20S3-yellow.svg)](https://aws.amazon.com/)
+[![Terraform](https://img.shields.io/badge/Terraform-1.5+-623CE4.svg)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/AWS-Kinesis%20%7C%20KDA%20%7C%20S3-yellow.svg)](https://aws.amazon.com/)
 
 AuthPulse is a **production-grade real-time streaming analytics platform** that processes enterprise authentication events to detect security anomalies, compute risk scores, and generate actionable insights for security operations teams.
 
-Built with **PySpark Structured Streaming on Amazon EMR**, it demonstrates modern data engineering best practices for high-throughput event processing, stateful stream analytics, and lakehouse architecture on AWS.
+Built with **Apache Flink on Managed Service for Apache Flink (KDA v2)** as the primary streaming engine, with a PySpark/EMR path for batch and historical replay. Infrastructure is fully provisioned with **Terraform**. It demonstrates modern data engineering best practices for high-throughput event processing, stateful stream analytics, and lakehouse architecture on AWS.
 
 **Pipeline Architecture:**
 ```
-LANL Dataset → Kinesis Streams → PySpark on EMR → S3 Iceberg Tables → Athena/QuickSight
+LANL Dataset → Kinesis Streams → Managed Apache Flink (KDA) → S3 Iceberg Tables → Athena/QuickSight
 ```
 
 **Key Capabilities:**
@@ -172,7 +173,9 @@ The dataset is replayed as a live event stream into Amazon Kinesis to simulate p
 | Component | Technology | Purpose |
 |-----------|------------|----------|
 | **Ingestion** | Amazon Kinesis Data Streams | Durable event buffer, 1MB/s per shard |
-| **Processing** | PySpark on Amazon EMR | Structured Streaming with micro-batching |
+| **Streaming (primary)** | Apache Flink on KDA v2 | Low-latency stateful stream processing |
+| **Streaming (secondary)** | PySpark on Amazon EMR | Batch replay + historical backfill |
+| **Infrastructure** | Terraform >= 1.5 | Full IaC for all AWS resources |
 | **Storage** | S3 + Apache Iceberg | ACID lakehouse with schema evolution |
 | **Catalog** | AWS Glue Data Catalog | Centralized metadata for Athena/QuickSight |
 | **Query** | Amazon Athena | Serverless SQL for ad-hoc investigations |
@@ -185,12 +188,15 @@ The dataset is replayed as a live event stream into Amazon Kinesis to simulate p
 
 ### Core Technologies
 - **Python 3.11+** - Primary development language
-- **PySpark 3.5+** - Structured Streaming for real-time processing
+- **Apache Flink 1.18+** - Primary streaming runtime (PyFlink SQL Table API)
+- **PySpark 3.5+** - Secondary path: batch replay and historical backfill on EMR
 - **Apache Iceberg 1.4+** - Lakehouse table format with ACID guarantees
+- **Terraform >= 1.5** - Infrastructure as Code for all AWS resources
 
 ### AWS Services
 - **Amazon Kinesis Data Streams** - Event ingestion (no Kafka/MSK)
-- **Amazon EMR** - Managed Spark cluster (no Glue ETL)
+- **Managed Service for Apache Flink (KDA v2)** - Serverless Flink runtime
+- **Amazon EMR** - Managed Spark cluster for batch/backfill path
 - **Amazon S3** - Raw and curated data zones
 - **AWS Glue Data Catalog** - Metadata repository
 - **Amazon Athena** - Serverless SQL queries
@@ -200,10 +206,9 @@ The dataset is replayed as a live event stream into Amazon Kinesis to simulate p
 
 ### Key Libraries
 - `boto3` - AWS SDK for Python
-- `pyspark` - DataFrame API and Structured Streaming
+- `pyflink` - Flink SQL Table API (runtime-provided on KDA)
+- `pyspark` - DataFrame API and Structured Streaming (runtime-provided on EMR)
 - `pyarrow` - Parquet file format support
-
-**No Docker, Terraform, or Airflow** - Pure AWS-native deployment.
 
 ---
 
@@ -212,35 +217,81 @@ The dataset is replayed as a live event stream into Amazon Kinesis to simulate p
 ```
 authpulse-aws-streaming-security-analytics/
 │
-├── producer/
-│   └── replay_producer.py          # Kinesis event replay script
+├── src/
+│   ├── producer/
+│   │   ├── replay_lanl.py              # Kinesis event replay (primary entry)
+│   │   └── config_loader.py            # Config from YAML / env vars
+│   ├── stream/
+│   │   ├── flink/
+│   │   │   └── main_job.py             # PyFlink SQL Table API job (KDA)
+│   │   ├── risk_rules.py               # Rule-based risk scoring logic
+│   │   └── state_manager.py            # Flink keyed state management
+│   ├── batch/                          # Daily batch aggregations
+│   ├── common/
+│   │   ├── models.py                   # Pydantic event models
+│   │   ├── metrics.py                  # CloudWatch metric publishing
+│   │   └── logging_utils.py            # Structured JSON logging
+│   └── quality/
+│       └── run_quality_checks.py       # Great Expectations DQ checks
 │
-├── streaming/
-│   ├── spark_streaming_job.py      # Main PySpark job
-│   ├── schemas.py                  # Event schema definitions
-│   ├── config.py                   # Configuration management
-│   ├── risk_engine.py              # Risk detection rules
-│   └── window_metrics.py           # Rolling aggregations
+├── streaming/                          # PySpark/EMR secondary path
+│   ├── spark_streaming_job.py          # PySpark Structured Streaming job
+│   ├── schemas.py                      # PySpark StructType schemas
+│   ├── config.py                       # Config dataclasses
+│   ├── risk_engine.py                  # PySpark UDF risk engine wrapper
+│   └── window_metrics.py              # Rolling window aggregations
+│
+├── infra/terraform/
+│   ├── envs/dev/                       # Dev environment root module
+│   │   ├── main.tf                     # Wires all modules
+│   │   ├── variables.tf
+│   │   └── terraform.tfvars.example    # Template (gitignored .tfvars)
+│   └── modules/
+│       ├── kinesis/                    # Kinesis stream
+│       ├── s3/                         # Lakehouse S3 bucket
+│       ├── iam/                        # Execution roles
+│       ├── glue_iceberg/               # Glue DB + Iceberg table definitions
+│       ├── kda_flink/                  # Managed Service for Apache Flink
+│       └── monitoring/                 # CloudWatch alarms + SNS
 │
 ├── lakehouse/
-│   ├── iceberg_ddl.sql             # Table creation DDL
-│   └── table_definitions.sql       # Schema documentation
+│   ├── iceberg_ddl.sql                 # CREATE TABLE DDL for Athena
+│   └── table_definitions.sql           # Schema documentation
 │
 ├── analytics/
-│   ├── athena_queries.sql          # Example SQL queries
-│   └── kpis.md                     # KPI definitions
+│   ├── athena_queries.sql              # Production SQL queries
+│   └── kpis.md                         # KPI definitions
 │
-├── monitoring/
-│   ├── sla_checks.sql              # Data quality checks
-│   └── cloudwatch_metrics.md       # Metrics catalog
+├── ci-cd/
+│   ├── tests/unit/                     # pytest unit tests
+│   └── tests/integration/              # pytest integration tests (needs AWS)
+│
+├── observability/
+│   ├── cloudwatch_dashboards.json      # CloudWatch dashboard JSON
+│   └── alarms/                         # Terraform alarm configs
 │
 ├── docs/
-│   ├── architecture.md             # System design
-│   ├── data_flow.md                # Pipeline details
-│   └── design_decisions.md         # ADRs (Architecture Decision Records)
+│   ├── architecture.md                 # System design
+│   ├── data_flow.md                    # Pipeline stage details
+│   ├── design_decisions.md             # ADRs (Architecture Decision Records)
+│   ├── data_contracts.md               # Event schema & field contracts
+│   ├── runbook_operations.md           # Ops runbook: deploy, alerts, rollback
+│   ├── sla_definition.md               # SLA targets and measurement
+│   └── faq_interview.md               # Interview talking points
 │
-├── requirements.txt                # Python dependencies
-└── README.md                       # This file
+├── scripts/                            # PowerShell dev helpers
+│   ├── setup_env.ps1
+│   ├── run_tests.ps1
+│   ├── commit.ps1
+│   └── terraform.ps1
+│
+├── config/
+│   ├── dev.yaml                        # Dev environment config
+│   └── prod.yaml                       # Prod environment config
+│
+├── pyproject.toml                      # Python project + pytest config
+├── requirements.txt                    # Python dependencies
+└── README.md                           # This file
 ```
 
 ---
@@ -432,95 +483,76 @@ pip install -r requirements.txt
 
 ## 💻 Usage
 
-### Step 1: Create AWS Resources
+### Step 1: Provision AWS Infrastructure (Terraform)
 
-#### 1.1 Create Kinesis Stream
-```bash
-aws kinesis create-stream \
-  --stream-name authpulse-stream \
-  --shard-count 2 \
-  --region us-east-1
+All AWS resources (Kinesis, S3, Glue, KDA Flink app, IAM, CloudWatch alarms) are created via Terraform.
+
+```powershell
+# Windows (PowerShell wrapper)
+cd infra/terraform/envs/dev
+
+# Copy example vars and fill in your account-specific values
+copy terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars: set alert_email and AWS account ID
+
+# Plan + apply (creates all AWS resources)
+.\..\..\..\scripts\terraform.ps1 -Env dev -Action plan
+.\..\..\..\scripts\terraform.ps1 -Env dev -Action apply
 ```
 
-#### 1.2 Create S3 Bucket
+This creates:
+- Kinesis stream: `authpulse-dev-stream`
+- S3 bucket: `authpulse-dev-lakehouse-<account-id>`
+- Glue database: `authpulse`
+- KDA Flink application: `authpulse-dev-flink-app`
+- CloudWatch alarms + SNS topic
+
+> **Note**: `terraform apply` creates real AWS resources (costs apply). Destroy with `terraform destroy` when done.
+
+### Step 2: Run Iceberg DDL in Athena
+
 ```bash
-aws s3 mb s3://authpulse-lakehouse-${AWS_ACCOUNT_ID}
+# Open Athena in AWS Console, run the contents of:
+cat lakehouse/iceberg_ddl.sql
+# Or via CLI:
+aws athena start-query-execution \
+  --query-string file://lakehouse/iceberg_ddl.sql \
+  --result-configuration OutputLocation=s3://authpulse-dev-lakehouse-<account-id>/athena-results/
 ```
 
-#### 1.3 Create Glue Database
+### Step 3: Upload Flink Job & Start Application
+
 ```bash
-aws glue create-database \
-  --database-input '{"Name":"authpulse","Description":"AuthPulse lakehouse"}'
+# Package the Flink job
+cd src/stream/flink
+zip -r authpulse-flink-job.zip *.py ../risk_rules.py ../state_manager.py
+
+# Upload to S3
+aws s3 cp authpulse-flink-job.zip \
+  s3://authpulse-dev-lakehouse-<account-id>/flink-app/authpulse-flink-job.zip
+
+# Start the KDA Flink application
+aws kinesisanalyticsv2 start-application \
+  --application-name authpulse-dev-flink-app \
+  --run-configuration '{"ApplicationRestoreConfiguration":{"ApplicationRestoreType":"SKIP_RESTORE_FROM_SNAPSHOT"}}'
 ```
 
-#### 1.4 Create IAM Role for EMR
-```bash
-# See docs/setup_iam.md for detailed role creation
-# Role should have: EMR service role, S3 access, Glue catalog access, Kinesis read
-```
-
-### Step 2: Start Event Replay Producer
+### Step 4: Start Event Replay Producer
 
 ```bash
-python producer/replay_producer.py \
+python src/producer/replay_lanl.py \
   --input data/raw/auth.txt \
-  --stream-name authpulse-stream \
+  --stream-name authpulse-dev-stream \
   --region us-east-1 \
   --rate 2000 \
-  --max-events 100000  # Optional limit for testing
+  --max-events 100000
 ```
 
 **Options**:
 - `--rate`: Events per second (default: 2000)
-- `--batch-size`: Records per put_records call (default: 500)
+- `--batch-size`: Records per `put_records` call (default: 500)
 - `--max-events`: Stop after N events (useful for testing)
-
-### Step 3: Launch EMR Cluster
-
-```bash
-aws emr create-cluster \
-  --name "AuthPulse-Streaming" \
-  --release-label emr-7.0.0 \
-  --applications Name=Spark \
-  --instance-type r5.xlarge \
-  --instance-count 3 \
-  --use-default-roles \
-  --log-uri s3://authpulse-lakehouse-${AWS_ACCOUNT_ID}/logs/ \
-  --region us-east-1
-```
-
-**Note**: Save the `ClusterId` from output.
-
-### Step 4: Submit Spark Streaming Job
-
-```bash
-# Package dependencies
-zip -r streaming.zip streaming/*.py
-
-# Upload to S3
-aws s3 cp streaming.zip s3://authpulse-lakehouse-${AWS_ACCOUNT_ID}/code/
-
-# Submit step to EMR
-aws emr add-steps \
-  --cluster-id j-XXXXXXXXXXXXX \
-  --steps Type=Spark,Name="AuthPulse Streaming",ActionOnFailure=CONTINUE,Args=[\
-    --deploy-mode,cluster,\
-    --packages,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.0,\
-    --py-files,s3://authpulse-lakehouse-${AWS_ACCOUNT_ID}/code/streaming.zip,\
-    s3://authpulse-lakehouse-${AWS_ACCOUNT_ID}/code/streaming/spark_streaming_job.py,\
-    --kinesis-stream,authpulse-stream,\
-    --s3-bucket,authpulse-lakehouse-${AWS_ACCOUNT_ID},\
-    --region,us-east-1]
-```
-
-### Step 5: Create Iceberg Tables
-
-```bash
-# Run DDL in Athena console or CLI
-aws athena start-query-execution \
-  --query-string file://lakehouse/iceberg_ddl.sql \
-  --result-configuration OutputLocation=s3://authpulse-lakehouse-${AWS_ACCOUNT_ID}/athena-results/
-```
+- `--dry-run`: Parse and validate without sending to Kinesis
 
 ### Step 6: Query Data in Athena
 
