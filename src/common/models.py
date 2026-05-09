@@ -7,9 +7,13 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 class AuthEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    event_time: datetime = Field(..., description="Event time as a timezone-aware UTC timestamp")
+    event_time: datetime = Field(
+        ..., description="Event time as a timezone-aware UTC timestamp"
+    )
     user_id: str = Field(..., min_length=1, description="User identifier (non-empty)")
-    computer_id: str = Field(..., min_length=1, description="Host/computer identifier (non-empty)")
+    computer_id: str = Field(
+        ..., min_length=1, description="Host/computer identifier (non-empty)"
+    )
     event_id: str = Field(
         ..., min_length=1, description="Stable unique identifier for deduplication"
     )
@@ -39,4 +43,6 @@ def parse_lanl_record(
 ) -> AuthEvent:
     _ = raw_line
     ts = datetime.fromtimestamp(int(time_s), tz=timezone.utc)
-    return AuthEvent(event_time=ts, user_id=user, computer_id=computer, event_id=event_id)
+    return AuthEvent(
+        event_time=ts, user_id=user, computer_id=computer, event_id=event_id
+    )

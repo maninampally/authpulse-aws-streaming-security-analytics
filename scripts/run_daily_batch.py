@@ -18,7 +18,9 @@ def _default_range() -> tuple[date, date]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Run daily AuthPulse batch aggregations (Athena)")
+    parser = argparse.ArgumentParser(
+        description="Run daily AuthPulse batch aggregations (Athena)"
+    )
     parser.add_argument(
         "--config",
         default=str(Path("config") / "dev.yaml"),
@@ -34,8 +36,12 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("end-date must be after start-date")
 
     # Order matters if you later base user aggregates on other outputs.
-    run_user_behavior_hourly(config_path=str(args.config), start_date=args.start_date, end_date=args.end_date)
-    run_host_popularity_daily(config_path=str(args.config), start_date=args.start_date, end_date=args.end_date)
+    run_user_behavior_hourly(
+        config_path=str(args.config), start_date=args.start_date, end_date=args.end_date
+    )
+    run_host_popularity_daily(
+        config_path=str(args.config), start_date=args.start_date, end_date=args.end_date
+    )
 
 
 if __name__ == "__main__":

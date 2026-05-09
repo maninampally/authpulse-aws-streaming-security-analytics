@@ -21,6 +21,7 @@ Desktop.ini
 # Local env
 .env
 logs/
+.checkpoints/
 
 # Data (do not commit LANL dataset)
 data/raw/

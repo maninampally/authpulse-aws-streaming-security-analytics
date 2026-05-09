@@ -89,7 +89,9 @@ def create_new_device_enriched_view(
     ds = t_env.to_data_stream(src_table)
 
     # Key by `user_id` so each user has independent state.
-    enriched_ds = ds.key_by(lambda row: getattr(row, "user_id", None) or row[1]).process(
+    enriched_ds = ds.key_by(
+        lambda row: getattr(row, "user_id", None) or row[1]
+    ).process(
         _NewDeviceFlagger(),
         output_type=Types.ROW_NAMED(
             ["event_time", "user_id", "computer_id", "event_id", "is_new_device"],

@@ -51,7 +51,9 @@ def rule_lateral_movement(ctx: RiskContext, cfg: dict[str, Any]) -> RuleResult:
 
     threshold = int(cfg["lateral_movement_unique_hosts_1h"])
     triggered = int(ctx.window_1h_unique_hosts) >= threshold
-    return RuleResult("lateral_movement", triggered, int(cfg["weight_lateral_movement"]))
+    return RuleResult(
+        "lateral_movement", triggered, int(cfg["weight_lateral_movement"])
+    )
 
 
 def rule_burst_login(ctx: RiskContext, cfg: dict[str, Any]) -> RuleResult:
@@ -79,8 +81,12 @@ def rule_new_device_spike(ctx: RiskContext, cfg: dict[str, Any]) -> RuleResult:
     """
 
     threshold = int(cfg["new_device_spike_unique_hosts_24h"])
-    triggered = bool(ctx.has_new_device) and int(ctx.window_24h_unique_hosts) >= threshold
-    return RuleResult("new_device_spike", triggered, int(cfg["weight_new_device_spike"]))
+    triggered = (
+        bool(ctx.has_new_device) and int(ctx.window_24h_unique_hosts) >= threshold
+    )
+    return RuleResult(
+        "new_device_spike", triggered, int(cfg["weight_new_device_spike"])
+    )
 
 
 def compute_risk_flags(

@@ -54,7 +54,9 @@ def load_athena_settings(*, config_path: str) -> AthenaSettings:
             "Set it to something like s3://authpulse-dev-raw/athena-results/"
         )
 
-    return AthenaSettings(workgroup=workgroup, output_s3=output_s3, region=region, profile=profile)
+    return AthenaSettings(
+        workgroup=workgroup, output_s3=output_s3, region=region, profile=profile
+    )
 
 
 def _boto3_athena_client(settings: AthenaSettings):
@@ -64,7 +66,9 @@ def _boto3_athena_client(settings: AthenaSettings):
     return session.client("athena")
 
 
-def run_athena_query(*, sql: str, settings: AthenaSettings, poll_seconds: float = 2.0) -> str:
+def run_athena_query(
+    *, sql: str, settings: AthenaSettings, poll_seconds: float = 2.0
+) -> str:
     athena = _boto3_athena_client(settings)
 
     start = athena.start_query_execution(
@@ -140,7 +144,9 @@ def run(*, config_path: str, start_date: date, end_date: date) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Populate lakehouse.host_popularity_daily via Athena")
+    parser = argparse.ArgumentParser(
+        description="Populate lakehouse.host_popularity_daily via Athena"
+    )
     parser.add_argument(
         "--config",
         default=str(Path("config") / "dev.yaml"),
@@ -155,7 +161,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.end_date <= args.start_date:
         raise SystemExit("end-date must be after start-date")
 
-    run(config_path=str(args.config), start_date=args.start_date, end_date=args.end_date)
+    run(
+        config_path=str(args.config), start_date=args.start_date, end_date=args.end_date
+    )
 
 
 if __name__ == "__main__":

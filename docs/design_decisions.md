@@ -61,7 +61,7 @@ Need stream processing engine for real-time transformations and aggregations.
 - Unified batch + streaming API — same risk logic reused for historical replay
 - Native Iceberg write support via Spark 3.5+
 - Better for large historical backfills (full LANL dataset replay)
-- `streaming/spark_streaming_job.py` provides this path
+- `src/stream/spark/main_job.py` provides this path
 
 **Trade-offs accepted:**
 - PyFlink Python API is less mature than Java/Scala Flink — mitigated by using SQL Table API

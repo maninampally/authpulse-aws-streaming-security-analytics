@@ -26,11 +26,11 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["common*", "producer*", "stream*", "batch*", "quality*", "ingest*"]
+include = ["common*", "producer*", "stream*", "batch*", "quality*"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.pytest.ini_options]
-testpaths = ["ci-cd/tests"]
+testpaths = ["tests"]

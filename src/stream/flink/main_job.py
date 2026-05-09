@@ -13,7 +13,9 @@ def _env(name: str, default: str | None = None) -> str | None:
     return value or default
 
 
-def _build_kinesis_source_ddl(*, table_name: str, stream_name: str, region: str, fmt: str) -> str:
+def _build_kinesis_source_ddl(
+    *, table_name: str, stream_name: str, region: str, fmt: str
+) -> str:
     common_with = "\n".join(
         [
             "  'connector' = 'kinesis',",
@@ -158,7 +160,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--s3-raw-path",
-        default=_env("AUTHPULSE_S3_RAW_PATH", "s3a://authpulse-dev-lakehouse-289591071327/raw/auth_events"),
+        default=_env(
+            "AUTHPULSE_S3_RAW_PATH",
+            "s3a://authpulse-dev-lakehouse-289591071327/raw/auth_events",
+        ),
         help="S3 path for raw sink (e.g., s3a://bucket/prefix)",
     )
     parser.add_argument(
@@ -251,10 +256,14 @@ def main() -> None:
 
     t_env.execute_sql(_build_s3_sink_ddl(table_name=sink_table, s3_path=s3_raw_path))
     t_env.execute_sql(
-        _build_user_features_sink_ddl(table_name=features_sink_table, s3_path=s3_features_path)
+        _build_user_features_sink_ddl(
+            table_name=features_sink_table, s3_path=s3_features_path
+        )
     )
     t_env.execute_sql(
-        _build_curated_events_sink_ddl(table_name=curated_sink_table, s3_path=s3_curated_events_path)
+        _build_curated_events_sink_ddl(
+            table_name=curated_sink_table, s3_path=s3_curated_events_path
+        )
     )
 
     # Raw event sink (schema normalized for json/csv via computed columns in the source DDL).
@@ -277,7 +286,9 @@ def main() -> None:
         ensure_user_behavior_feature_views,
     )
 
-    features_view = ensure_user_behavior_feature_views(t_env, auth_events_table=auth_events_view)
+    features_view = ensure_user_behavior_feature_views(
+        t_env, auth_events_table=auth_events_view
+    )
     features_insert_sql = build_insert_user_features_sql(
         features_view=features_view,
         sink_table=features_sink_table,

@@ -7,6 +7,7 @@ from pathlib import Path
 from batch.jobs.host_popularity_daily_job import run as run_host_popularity_daily
 from batch.jobs.user_behavior_hourly_job import run as run_user_behavior_hourly
 
+
 def _parse_date(value: str) -> date:
     return date.fromisoformat(value)
 

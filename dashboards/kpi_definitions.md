@@ -140,3 +140,33 @@ Risk Level:
 | Flink Checkpoint Duration | KDA `lastCheckpointDuration` | > 10000 ms |
 | Events / min | Kinesis `IncomingRecords` 1-min sum | — |
 | High-Risk Events / hr | Custom `AuthPulse/HighRiskCount` | > 500 |
+
+---
+
+## Imported KPI Notes
+
+These notes were merged from the legacy `analytics/kpis.md` file so the dashboard definitions stay in one place.
+
+### Risk Score Formula
+```text
+risk_score = (is_new_device       * 30)
+           + (is_burst_login      * 25)
+           + (is_lateral_movement * 35)
+           + (is_rare_host        * 10)
+
+Risk Level:
+  LOW      :  0 – 25
+  MEDIUM   : 26 – 50
+  HIGH     : 51 – 75
+  CRITICAL : 76+
+```
+
+### Dashboard Widgets
+| Widget | Metric / Query | Alarm Threshold |
+|--------|---------------|------------------|
+| Freshness (P95) | Athena Query 7 result | > 300s |
+| Invalid Record % | `AuthPulse/InvalidRecordRate` | > 0.1% |
+| Kinesis Iterator Age | `GetRecords.IteratorAgeMilliseconds` | > 60000 ms |
+| Flink Checkpoint Duration | KDA `lastCheckpointDuration` | > 10000 ms |
+| Events / min | Kinesis `IncomingRecords` 1-min sum | — |
+| High-Risk Events / hr | Custom `AuthPulse/HighRiskCount` | > 500 |

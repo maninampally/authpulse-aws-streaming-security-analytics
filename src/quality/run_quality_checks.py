@@ -63,7 +63,9 @@ def load_athena_settings(*, config_path: str) -> AthenaSettings:
             "Set it to something like s3://authpulse-dev-raw/athena-results/"
         )
 
-    return AthenaSettings(workgroup=workgroup, output_s3=output_s3, region=region, profile=profile)
+    return AthenaSettings(
+        workgroup=workgroup, output_s3=output_s3, region=region, profile=profile
+    )
 
 
 def _boto3_session(*, region: str, profile: str | None):
@@ -72,7 +74,9 @@ def _boto3_session(*, region: str, profile: str | None):
     return boto3.Session(profile_name=profile, region_name=region)
 
 
-def run_athena_query(*, sql: str, settings: AthenaSettings, poll_seconds: float = 2.0) -> str:
+def run_athena_query(
+    *, sql: str, settings: AthenaSettings, poll_seconds: float = 2.0
+) -> str:
     """Run an Athena query and block until it finishes. Returns QueryExecutionId."""
 
     session = _boto3_session(region=settings.region, profile=settings.profile)
@@ -159,18 +163,22 @@ def _normalize_expected_columns(expected: list[Any]) -> list[tuple[str, str]]:
     for item in expected:
         if not isinstance(item, dict) or len(item) != 1:
             raise ValueError("expected_columns must be a list of single-entry mappings")
-        (name, dtype), = item.items()
+        ((name, dtype),) = item.items()
         out.append((str(name), str(dtype).lower()))
     return out
 
 
-def _write_report_files(*, report_dir: Path, stem: str, payload: dict[str, Any]) -> tuple[Path, Path]:
+def _write_report_files(
+    *, report_dir: Path, stem: str, payload: dict[str, Any]
+) -> tuple[Path, Path]:
     report_dir.mkdir(parents=True, exist_ok=True)
 
     json_path = report_dir / f"{stem}.json"
     md_path = report_dir / f"{stem}.md"
 
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=False), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=False), encoding="utf-8"
+    )
 
     lines: list[str] = []
     lines.append(f"# Data Quality Report: {payload['table']}")
@@ -191,7 +199,9 @@ def _write_report_files(*, report_dir: Path, stem: str, payload: dict[str, Any])
     return json_path, md_path
 
 
-def _maybe_upload_report(*, config: dict[str, Any], settings: AthenaSettings, report_path: Path) -> str | None:
+def _maybe_upload_report(
+    *, config: dict[str, Any], settings: AthenaSettings, report_path: Path
+) -> str | None:
     prefix = _get_nested(config, ["dq", "s3_reports_prefix"], None)
     if not prefix:
         return None
@@ -242,7 +252,9 @@ def run_suite(*, config_path: str, suite_path: str) -> dict[str, Any]:
             col = str(chk.get("column", "")).strip()
             if not col:
                 raise ValueError(f"not_null check '{name}' missing column")
-            failed_rows = _sql_count(table=table, where=f"{col} IS NULL", settings=settings)
+            failed_rows = _sql_count(
+                table=table, where=f"{col} IS NULL", settings=settings
+            )
             details = {"column": col}
 
         elif typ == "range":
@@ -253,7 +265,9 @@ def run_suite(*, config_path: str, suite_path: str) -> dict[str, Any]:
             if "allowed_values" in chk:
                 allowed = chk.get("allowed_values")
                 if not isinstance(allowed, list) or not allowed:
-                    raise ValueError(f"allowed_values must be a non-empty list for '{name}'")
+                    raise ValueError(
+                        f"allowed_values must be a non-empty list for '{name}'"
+                    )
                 allowed_sql = _format_allowed_values(allowed)
                 where = f"{col} NOT IN ({allowed_sql})"
                 failed_rows = _sql_count(table=table, where=where, settings=settings)
@@ -288,7 +302,11 @@ def run_suite(*, config_path: str, suite_path: str) -> dict[str, Any]:
                     # Athena types can vary (e.g. varchar vs string); keep it simple.
                     if act_type != exp_type:
                         mismatched.append(
-                            {"column": col_name, "expected": exp_type, "actual": act_type}
+                            {
+                                "column": col_name,
+                                "expected": exp_type,
+                                "actual": act_type,
+                            }
                         )
 
             # Represent schema failures as row failures (1) to fit the reporting format.
@@ -329,8 +347,12 @@ def run_suite(*, config_path: str, suite_path: str) -> dict[str, Any]:
 
     report_dir = Path(__file__).parent / "dq_reports"
     stem = f"dq_{table.replace('.', '_')}_{now.strftime('%Y%m%d_%H%M%S')}"
-    json_path, _ = _write_report_files(report_dir=report_dir, stem=stem, payload=payload)
-    uploaded = _maybe_upload_report(config=config, settings=settings, report_path=json_path)
+    json_path, _ = _write_report_files(
+        report_dir=report_dir, stem=stem, payload=payload
+    )
+    uploaded = _maybe_upload_report(
+        config=config, settings=settings, report_path=json_path
+    )
     if uploaded:
         payload["s3_report"] = uploaded
 
@@ -396,7 +418,9 @@ def _maybe_put_cloudwatch_metric(
 
     namespace = str(_get_nested(config, ["dq", "cloudwatch_namespace"], "Authpulse/DQ"))
     metric_name = str(
-        _get_nested(config, ["dq", "invalid_percent_metric_name"], "InvalidRecordPercent")
+        _get_nested(
+            config, ["dq", "invalid_percent_metric_name"], "InvalidRecordPercent"
+        )
     )
 
     session = _boto3_session(region=settings.region, profile=settings.profile)
@@ -422,7 +446,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--suite",
-        default=str(Path(__file__).parent / "expectations" / "auth_events_expectations.yml"),
+        default=str(
+            Path(__file__).parent / "expectations" / "auth_events_expectations.yml"
+        ),
         help="Path to expectations suite YAML",
     )
     args = parser.parse_args()
@@ -434,7 +460,9 @@ def main() -> None:
     report = run_suite(config_path=str(args.config), suite_path=str(suite_path))
 
     # Emit a single, consistent metric line so infra can attach log metric filters.
-    invalid_record_percent, invalid_rows_estimate, total_rows = _compute_invalid_record_stats(report)
+    invalid_record_percent, invalid_rows_estimate, total_rows = (
+        _compute_invalid_record_stats(report)
+    )
     _emit_dq_invalid_percent_log_line(
         report=report,
         invalid_record_percent=invalid_record_percent,

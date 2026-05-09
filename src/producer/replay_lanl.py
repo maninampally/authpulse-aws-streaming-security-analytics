@@ -84,7 +84,9 @@ def iter_lanl_rows(
             return
 
 
-def _sleep_for_rate(*, sent_events: int, start_time: float, rate_events_per_sec: int) -> None:
+def _sleep_for_rate(
+    *, sent_events: int, start_time: float, rate_events_per_sec: int
+) -> None:
     if rate_events_per_sec <= 0:
         return
     elapsed = time.time() - start_time
@@ -160,7 +162,9 @@ def replay_to_kinesis(
         data = json.loads(checkpoint_file.read_text(encoding="utf-8"))
         start_line = int(data.get("line", 0))
 
-    session = boto3.Session(profile_name=aws_profile) if aws_profile else boto3.Session()
+    session = (
+        boto3.Session(profile_name=aws_profile) if aws_profile else boto3.Session()
+    )
     client = session.client("kinesis", region_name=region)
 
     sent = 0
@@ -180,7 +184,9 @@ def replay_to_kinesis(
             batch = []
             return
 
-        ok, bad = _put_records_with_retry(client=client, stream_name=stream_name, records=batch)
+        ok, bad = _put_records_with_retry(
+            client=client, stream_name=stream_name, records=batch
+        )
         sent += ok
         failed += bad
         batch = []
@@ -192,14 +198,20 @@ def replay_to_kinesis(
     ):
         event_id = make_event_id(time_s, user, computer)
         event = parse_lanl_record(time_s, user, computer, event_id)
-        payload = json.dumps(event.model_dump(mode="json"), separators=(",", ":")).encode("utf-8")
+        payload = json.dumps(
+            event.model_dump(mode="json"), separators=(",", ":")
+        ).encode("utf-8")
 
         batch.append({"Data": payload, "PartitionKey": event.user_id})
         line_cursor += 1
 
         if len(batch) >= batch_size:
             flush()
-            _sleep_for_rate(sent_events=sent, start_time=start, rate_events_per_sec=rate_events_per_sec)
+            _sleep_for_rate(
+                sent_events=sent,
+                start_time=start,
+                rate_events_per_sec=rate_events_per_sec,
+            )
 
         if checkpoint_file and (sent - last_checkpoint_at) >= checkpoint_every:
             checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
@@ -248,7 +260,12 @@ def main() -> None:
     ap.add_argument("--profile", help="AWS CLI profile name")
     ap.add_argument("--rate", type=int, help="Events per second (overrides config)")
     ap.add_argument("--max-events", type=int, default=None)
-    ap.add_argument("--batch-size", type=int, default=200, help="Kinesis PutRecords batch size (1-500)")
+    ap.add_argument(
+        "--batch-size",
+        type=int,
+        default=200,
+        help="Kinesis PutRecords batch size (1-500)",
+    )
     ap.add_argument(
         "--checkpoint",
         default=str(Path(".checkpoints") / "replay_dev.json"),
@@ -256,19 +273,29 @@ def main() -> None:
     )
     ap.add_argument("--resume", action="store_true", help="Resume from checkpoint")
     ap.add_argument("--checkpoint-every", type=int, default=5_000)
-    ap.add_argument("--dry-run", action="store_true", help="Parse/validate but do not send")
+    ap.add_argument(
+        "--dry-run", action="store_true", help="Parse/validate but do not send"
+    )
     args = ap.parse_args()
 
     cfg = load_yaml(args.config)
     cfg_kinesis = cfg.get("kinesis", {}) if isinstance(cfg.get("kinesis"), dict) else {}
-    cfg_producer = cfg.get("producer", {}) if isinstance(cfg.get("producer"), dict) else {}
+    cfg_producer = (
+        cfg.get("producer", {}) if isinstance(cfg.get("producer"), dict) else {}
+    )
 
     stream_name = args.stream_name or str(cfg_kinesis.get("stream_name") or "")
     if not stream_name:
-        raise SystemExit("Missing stream name. Provide --stream-name or set kinesis.stream_name in config.")
+        raise SystemExit(
+            "Missing stream name. Provide --stream-name or set kinesis.stream_name in config."
+        )
 
     region = args.region or str(cfg_kinesis.get("region") or "us-east-1")
-    rate = args.rate if args.rate is not None else int(cfg_producer.get("rate_events_per_sec") or 2000)
+    rate = (
+        args.rate
+        if args.rate is not None
+        else int(cfg_producer.get("rate_events_per_sec") or 2000)
+    )
 
     metrics = replay_to_kinesis(
         input_path=args.input,
@@ -283,7 +310,9 @@ def main() -> None:
         checkpoint_every=args.checkpoint_every,
         dry_run=args.dry_run,
     )
-    logger.info("metrics %s", json.dumps(metrics, separators=(",", ":"), sort_keys=True))
+    logger.info(
+        "metrics %s", json.dumps(metrics, separators=(",", ":"), sort_keys=True)
+    )
 
 
 if __name__ == "__main__":

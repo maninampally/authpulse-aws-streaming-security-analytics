@@ -234,12 +234,12 @@ authpulse-aws-streaming-security-analytics/
 │   └── quality/
 │       └── run_quality_checks.py       # Great Expectations DQ checks
 │
-├── streaming/                          # PySpark/EMR secondary path
-│   ├── spark_streaming_job.py          # PySpark Structured Streaming job
+│   ├── spark/
+│   │   └── main_job.py                 # PySpark Structured Streaming job
 │   ├── schemas.py                      # PySpark StructType schemas
 │   ├── config.py                       # Config dataclasses
 │   ├── risk_engine.py                  # PySpark UDF risk engine wrapper
-│   └── window_metrics.py              # Rolling window aggregations
+│   └── window_metrics.py               # Rolling window aggregations
 │
 ├── infra/terraform/
 │   ├── envs/dev/                       # Dev environment root module
@@ -254,17 +254,9 @@ authpulse-aws-streaming-security-analytics/
 │       ├── kda_flink/                  # Managed Service for Apache Flink
 │       └── monitoring/                 # CloudWatch alarms + SNS
 │
-├── lakehouse/
-│   ├── iceberg_ddl.sql                 # CREATE TABLE DDL for Athena
-│   └── table_definitions.sql           # Schema documentation
-│
-├── analytics/
-│   ├── athena_queries.sql              # Production SQL queries
-│   └── kpis.md                         # KPI definitions
-│
-├── ci-cd/
-│   ├── tests/unit/                     # pytest unit tests
-│   └── tests/integration/              # pytest integration tests (needs AWS)
+├── tests/
+│   ├── unit/                           # pytest unit tests
+│   └── integration/                    # pytest integration tests (needs AWS)
 │
 ├── observability/
 │   ├── cloudwatch_dashboards.json      # CloudWatch dashboard JSON
@@ -513,10 +505,10 @@ This creates:
 
 ```bash
 # Open Athena in AWS Console, run the contents of:
-cat lakehouse/iceberg_ddl.sql
+cat src/batch/ddl/iceberg_auth_events.sql
 # Or via CLI:
 aws athena start-query-execution \
-  --query-string file://lakehouse/iceberg_ddl.sql \
+  --query-string file://src/batch/ddl/iceberg_auth_events.sql \
   --result-configuration OutputLocation=s3://authpulse-dev-lakehouse-<account-id>/athena-results/
 ```
 
@@ -571,7 +563,7 @@ ORDER BY total_risk DESC
 LIMIT 20;
 ```
 
-See [analytics/athena_queries.sql](analytics/athena_queries.sql) for more examples.
+See [src/batch/ddl/athena_queries.sql](src/batch/ddl/athena_queries.sql) for more examples.
 
 ### Step 7: Build QuickSight Dashboard
 
@@ -643,7 +635,7 @@ aws sns subscribe \
 - Spark job failure
 - Kinesis throttling
 
-See [monitoring/cloudwatch_metrics.md](monitoring/cloudwatch_metrics.md) for complete metric catalog.
+See [observability/cloudwatch_metrics.md](observability/cloudwatch_metrics.md) for complete metric catalog.
 
 ---
 
@@ -721,9 +713,9 @@ PySpark, Apache Iceberg, AWS EMR, Kinesis Data Streams, AWS Glue, Amazon Athena,
 - **[Architecture Overview](docs/architecture.md)** - Detailed system design and component specifications
 - **[Data Flow](docs/data_flow.md)** - End-to-end pipeline stages and transformations
 - **[Design Decisions](docs/design_decisions.md)** - ADRs explaining technology choices
-- **[Athena Query Examples](analytics/athena_queries.sql)** - Production SQL queries
-- **[KPI Definitions](analytics/kpis.md)** - Key performance indicators and metrics
-- **[CloudWatch Metrics](monitoring/cloudwatch_metrics.md)** - Complete observability catalog
+- **[Athena Query Examples](src/batch/ddl/athena_queries.sql)** - Production SQL queries
+- **[KPI Definitions](dashboards/kpi_definitions.md)** - Key performance indicators and metrics
+- **[CloudWatch Metrics](observability/cloudwatch_metrics.md)** - Complete observability catalog
 
 ---
 

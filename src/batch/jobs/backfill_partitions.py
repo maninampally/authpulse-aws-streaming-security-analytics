@@ -53,7 +53,9 @@ def _build_sql(*, start_date: date, end_date: date) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Backfill lakehouse.auth_events_curated")
+    parser = argparse.ArgumentParser(
+        description="Backfill lakehouse.auth_events_curated"
+    )
     parser.add_argument(
         "--config",
         default=str(Path("config") / "dev.yaml"),
@@ -69,7 +71,9 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("end-date must be after start-date")
 
     settings = load_athena_settings(config_path=str(args.config))
-    delete_sql, insert_sql = _build_sql(start_date=args.start_date, end_date=args.end_date)
+    delete_sql, insert_sql = _build_sql(
+        start_date=args.start_date, end_date=args.end_date
+    )
 
     print(
         f"[backfill_partitions] Refreshing {args.start_date.isoformat()} → {args.end_date.isoformat()} "
