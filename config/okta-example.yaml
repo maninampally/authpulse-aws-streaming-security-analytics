@@ -1,0 +1,9 @@
+# Okta Configuration
+# Get API key from: Okta Admin Console → API → Tokens → Create Token
+
+okta:
+  api_key: "${OKTA_API_KEY}"  # Set via environment variable
+  org_url: "https://myorg.okta.com"
+
+aws_region: "us-east-1"
+batch_size: 10000  # Max events per fetch

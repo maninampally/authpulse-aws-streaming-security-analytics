@@ -1,0 +1,24 @@
+# AWS IAM Configuration
+# Fetches CloudTrail events for authentication-related activities
+
+aws_region: "us-east-1"
+batch_size: 10000
+
+# CloudTrail must be enabled and configured to log API calls
+# Required IAM permissions:
+#   - cloudtrail:LookupEvents
+#   - cloudtrail:DescribeTrails
+#   - logs:DescribeLogGroups
+#   - logs:DescribeLogStreams
+#   - logs:GetLogEvents
+
+cloudtrail:
+  trail_name: "authpulse-cloudtrail"  # Name of CloudTrail to query
+  s3_bucket: "authpulse-cloudtrail-logs"  # Optional: S3 bucket for raw logs
+
+# Event types to capture (filter by event name in CloudTrail)
+events:
+  - ConsoleLogin
+  - AssumeRole
+  - CreateAccessKey
+  - DeleteAccessKey

@@ -1,0 +1,18 @@
+# Active Directory Configuration
+# Requires LDAP access or WinRM connectivity to domain controller
+
+ad:
+  server: "dc01.example.com"  # Domain controller hostname
+  domain: "EXAMPLE.COM"
+  username: "${AD_USERNAME}"  # Service account with Event Log Read permissions
+  password: "${AD_PASSWORD}"
+
+aws_region: "us-east-1"
+batch_size: 10000  # Max events per query
+
+# Optional: WinRM configuration
+winrm:
+  enabled: false
+  username: "${WINRM_USERNAME}"
+  password: "${WINRM_PASSWORD}"
+  port: 5985

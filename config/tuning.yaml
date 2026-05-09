@@ -1,0 +1,318 @@
+"""
+Performance Tuning Configuration for AuthPulse
+Includes Iceberg, Spark, Flink, and EMR optimization parameters.
+"""
+
+# ============================================================================
+# ICEBERG TABLE OPTIMIZATION
+# ============================================================================
+
+iceberg_tables:
+  auth_events_curated:
+    # Partitioning strategy (improves query performance)
+    partition_spec:
+      # Date partition (required for retention queries)
+      event_date: "date"
+      # Hash partition on user_id (evens out hotspots)
+      user_id: "hash[16]"
+
+    # Compression (reduces storage, slightly slower queries)
+    format_version: 2
+    write_format: "parquet"
+    compression_codec: "snappy"  # Options: snappy, gzip, zstd
+
+    # Optimize frequency (reduce file count in table)
+    compaction:
+      enabled: true
+      target_file_size_mb: 500
+      min_file_size_mb: 10
+      max_file_size_mb: 1000
+
+    # Expire old snapshots (clean up history)
+    retention:
+      min_snapshots_to_keep: 10
+      snapshot_retention_days: 30
+      default_file_retention_days: 730  # 2 years
+
+    # Enable schema evolution (allow column adds/deletes)
+    schema_evolution_enabled: true
+    write_stats: true
+
+  user_behavior_hourly:
+    partition_spec:
+      window_time: "day"
+      user_id: "hash[16]"
+
+    write_format: "parquet"
+    compression_codec: "snappy"
+
+    compaction:
+      enabled: true
+      target_file_size_mb: 256
+
+    retention:
+      snapshot_retention_days: 90
+      default_file_retention_days: 365  # 1 year
+
+    # Calculate statistics for aggregation queries
+    write_stats: true
+
+  host_popularity_daily:
+    partition_spec:
+      access_date: "day"
+
+    write_format: "parquet"
+    compression_codec: "snappy"
+
+    retention:
+      snapshot_retention_days: 60
+      default_file_retention_days: 1095  # 3 years
+
+
+# ============================================================================
+# SPARK JOB OPTIMIZATION
+# ============================================================================
+
+spark:
+  # Memory and CPU configuration
+  executor:
+    memory_gb: 8
+    cores: 4
+    memory_overhead_gb: 1  # Off-heap memory for Spark
+
+  driver:
+    memory_gb: 4
+    cores: 2
+
+  # Parallelism tuning
+  # Rule of thumb: parallelism = num_executors * num_cores
+  default_parallelism: 256  # Dev: 16, Staging: 64, Prod: 256
+  sql_shuffle_partitions: 256
+
+  # Enable adaptive query execution (adjusts partitions automatically)
+  adaptive_execution_enabled: true
+  adaptive_execution_min_partitions: 64
+
+  # Optimize SQL performance
+  sql:
+    # Use Catalyst optimizer aggressive rules
+    optimize_enabled: true
+
+    # Push down filters to storage layer
+    pushdown_predicate_enabled: true
+
+    # Broadcast joins for small tables (<100MB)
+    broadcast_threshold_mb: 100
+
+    # Stats collection for cost-based optimization
+    stats_enabled: true
+    stats_sample_rate: 0.1  # 10% sample for large tables
+
+  # Caching strategy
+  caching:
+    # Cache intermediate DataFrames to avoid recomputation
+    checkpoint_enabled: true
+    # Shuffle service for better spill handling
+    shuffle_service_enabled: true
+    shuffle_service_external: true
+
+  # Avoid common pitfalls
+  avoid:
+    - rdd_operations  # Use DataFrame API (Catalyst optimized)
+    - collect_operations  # Only if necessary; use limit() instead
+    - broadcast_everything  # Only <100MB tables
+    - wide_transformations  # Group by id before aggregation
+
+
+# ============================================================================
+# KINESIS OPTIMIZATION
+# ============================================================================
+
+kinesis:
+  # Shard configuration
+  shards:
+    # Rule: incoming_throughput_MB/s × 1.5 / 1 MB per shard
+    # For 10k events/sec @ 1KB each = ~10 MB/s → need 15 shards
+    recommended_dev: 2
+    recommended_staging: 4
+    recommended_prod: 8
+
+  # Batch settings for consumers
+  batch:
+    max_records: 100  # Max records per GetRecords call
+    wait_seconds: 1   # Wait time if no records
+
+  # Retention settings
+  retention_hours: 24
+  enhanced_monitoring: true  # Enable detailed metrics
+
+
+# ============================================================================
+# FLINK OPTIMIZATION
+# ============================================================================
+
+flink:
+  # Parallelism: balance between latency and throughput
+  parallelism: 32  # Dev: 4, Staging: 8, Prod: 32
+
+  # State management (for windowed aggregations)
+  checkpoint:
+    interval_ms: 60000  # 60 seconds
+    mode: "EXACTLY_ONCE"  # Ensures no duplicate processing
+    timeout_ms: 600000  # 10 min timeout
+    pause_between_checkpoints_ms: 5000
+
+  # RocksDB state backend (for large state)
+  state_backend: "rocksdb"
+  rocksdb:
+    cache_size_mb: 1024
+    write_buffer_size_mb: 16
+    # Optimize for SSD performance
+    block_size: 4096
+    # Compression
+    compression_type: "lz4"
+
+  # Watermarking (for late data handling)
+  watermark:
+    allowed_lateness_ms: 300000  # 5 minutes
+    sideoutput_late_data: true   # Send late data to side output
+
+  # Network optimization
+  network:
+    buffer_timeout_ms: 100
+    shuffle_min_parallelism: 4
+
+
+# ============================================================================
+# EMR CLUSTER OPTIMIZATION
+# ============================================================================
+
+emr:
+  # Instance configuration
+  master:
+    instance_type: "m5.4xlarge"  # 16 vCPU, 64 GB RAM
+    volume_size_gb: 200
+
+  core:
+    instance_type: "m5.2xlarge"   # 8 vCPU, 32 GB RAM
+    instance_count: 4
+    volume_size_gb: 500  # Larger for HDFS
+
+  task:
+    instance_type: "m5.2xlarge"
+    instance_count: 2
+    spot_price_usd: 0.50  # Spot instance bid
+    volume_size_gb: 200
+
+  # Spark-specific EMR parameters
+  spark_defaults:
+    # Memory per executor
+    spark.executor.memory: "24g"
+    spark.executor.cores: 8
+    spark.driver.memory: "8g"
+
+    # Networking
+    spark.driver.maxResultSize: "2g"
+    spark.network.timeout: 800s
+
+    # Shuffle optimization
+    spark.shuffle.manager: "sort"
+    spark.shuffle.type: "sort"
+
+    # Iceberg optimization
+    spark.sql.iceberg.commit.num.retries: 3
+    spark.sql.iceberg.commit.lock.retry.num-retries: 3
+
+  # HDFS optimization (for shuffle spill)
+  hdfs:
+    dfs.replication: 2
+    dfs.blocksize: "256m"
+    dfs.namenode.heartbeat.recheck-interval: 300000
+
+  # Bootstrap script (install dependencies)
+  bootstrap_actions:
+    - install_python_311
+    - install_iceberg_spark_extensions
+    - optimize_yarn
+
+
+# ============================================================================
+# QUERY OPTIMIZATION (Athena/QuickSight)
+# ============================================================================
+
+athena:
+  # Output location for query results
+  results_bucket: "s3://authpulse-prod-lakehouse-query-results/"
+
+  # Workgroup configuration
+  workgroup: "authpulse-analytics"
+
+  # Query optimization
+  enforce_workgroup_config: true
+  bytes_scanned_cutoff: 1000000000  # 1GB max scan
+
+  # Result caching
+  result_reuse_enabled: true
+  result_reuse_max_age_minutes: 60
+
+
+# ============================================================================
+# BENCHMARKING & TARGETS
+# ============================================================================
+
+benchmarks:
+  # Throughput targets (events/sec)
+  throughput:
+    dev: 1000
+    staging: 5000
+    prod: 10000
+
+  # Latency targets (P95, in seconds)
+  latency:
+    kinesis_to_iceberg: 300  # 5 minutes
+    query_response: 30       # 30 seconds
+    dashboard_refresh: 60    # 1 minute
+
+  # Storage efficiency
+  compression_ratio: 0.4  # 40% of original size after compression
+  bytes_per_event: 1000   # 1KB per event average
+
+  # Cost targets
+  cost:
+    dev_monthly_usd: 300
+    staging_monthly_usd: 600
+    prod_monthly_usd: 1200
+
+
+# ============================================================================
+# PERFORMANCE MONITORING
+# ============================================================================
+
+monitoring:
+  # CloudWatch metrics to track
+  kinesis_metrics:
+    - IncomingRecords
+    - GetRecords.IteratorAgeMilliseconds  # Monitor backpressure
+    - WriteProvisionedThroughputExceeded
+
+  flink_metrics:
+    - numRecordsInPerSecond
+    - numRecordsOut
+    - numRecordsOutPerSecond
+    - numRecordsDropped
+    - checkpointDuration
+
+  emr_metrics:
+    - YARNContainersRunning
+    - YARNMemoryUsagePercentage
+    - CorruptBlocks
+    - GiB_HD_Used
+
+  # Alarms
+  alarms:
+    - "Iterator age > 5 min" (freshness SLA)
+    - "Failed checkpoints > 3 consecutive"
+    - "Flink lag increasing"
+    - "Disk usage > 90%"
+    - "Memory usage > 85%"
+    - "Query response time > 60s"

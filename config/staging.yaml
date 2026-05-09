@@ -1,0 +1,28 @@
+app:
+  env: staging
+
+aws:
+  region: us-east-1
+  profile: default
+
+kinesis:
+  stream_name: authpulse-staging-stream
+  region: us-east-1
+  partition_key_field: user_id
+
+replay:
+  input_path: E_extract/data/sample/auth_sample.csv
+  batch_size: 500
+  sleep_interval_ms: 0
+
+producer:
+  rate_events_per_sec: 5000
+
+athena:
+  workgroup: primary
+  output_s3: s3://authpulse-staging-raw/athena-results/
+
+dq:
+  # Optional: if set, JSON DQ reports are uploaded to S3.
+  # Example: s3://authpulse-staging-curated/dq_reports/
+  s3_reports_prefix: ""
