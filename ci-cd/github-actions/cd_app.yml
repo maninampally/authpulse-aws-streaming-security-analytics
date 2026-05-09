@@ -1,13 +1,114 @@
 name: cd-app
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/stream/**'
+      - 'src/common/**'
   workflow_dispatch:
 
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: authpulse-dev-lakehouse-289591071327
+  S3_KEY: flink-app/authpulse-flink-job.zip
+  KDA_APP_NAME: authpulse-dev-flink-app
+
 jobs:
-  build:
+  build-and-deploy:
+    name: Build & Deploy Flink Job
     runs-on: ubuntu-latest
+    # Only deploy on pushes to main (not on PRs triggering workflow_dispatch)
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+
     steps:
       - uses: actions/checkout@v4
-      - name: Build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
         run: |
-          echo "Placeholder: build/package and deploy Flink job"
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run unit tests before deploy
+        run: pytest ci-cd/tests/unit/ -q
+
+      - name: Package Flink job
+        run: |
+          mkdir -p dist/flink_job
+          # Copy Flink entry point
+          cp src/stream/flink/main_job.py dist/flink_job/
+          # Copy risk + state logic
+          cp src/stream/risk_rules.py    dist/flink_job/
+          cp src/stream/state_manager.py dist/flink_job/
+          cp src/stream/__init__.py      dist/flink_job/
+          # Copy common models
+          mkdir -p dist/flink_job/common
+          cp src/common/*.py             dist/flink_job/common/
+          # Zip everything
+          cd dist/flink_job
+          zip -r ../../authpulse-flink-job.zip .
+          cd ../..
+          echo "Flink job ZIP size: $(du -sh authpulse-flink-job.zip | cut -f1)"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload Flink job ZIP to S3
+        run: |
+          aws s3 cp authpulse-flink-job.zip \
+            s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Uploaded to s3://${{ env.S3_BUCKET }}/${{ env.S3_KEY }}"
+
+      - name: Get current KDA application version
+        id: kda_version
+        run: |
+          VERSION=$(aws kinesisanalyticsv2 describe-application \
+            --application-name ${{ env.KDA_APP_NAME }} \
+            --query 'ApplicationDetail.ApplicationVersionId' \
+            --output text)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current KDA version: $VERSION"
+
+      - name: Update KDA Flink application
+        run: |
+          aws kinesisanalyticsv2 update-application \
+            --application-name ${{ env.KDA_APP_NAME }} \
+            --current-application-version-id ${{ steps.kda_version.outputs.version }} \
+            --application-configuration-update '{
+              "ApplicationCodeConfigurationUpdate": {
+                "CodeContentUpdate": {
+                  "S3ContentLocationUpdate": {
+                    "BucketARNUpdate": "arn:aws:s3:::${{ env.S3_BUCKET }}",
+                    "FileKeyUpdate": "${{ env.S3_KEY }}"
+                  }
+                }
+              }
+            }'
+          echo "KDA application updated. Restart required to pick up new code."
+
+      - name: Restart KDA Flink application
+        run: |
+          # Stop first (required to apply new code)
+          aws kinesisanalyticsv2 stop-application \
+            --application-name ${{ env.KDA_APP_NAME }} \
+            --force
+          # Wait for READY state
+          echo "Waiting for application to stop..."
+          aws kinesisanalyticsv2 wait application-not-exists \
+            --application-name ${{ env.KDA_APP_NAME }} 2>/dev/null || true
+          sleep 15
+          # Start with latest snapshot or clean
+          aws kinesisanalyticsv2 start-application \
+            --application-name ${{ env.KDA_APP_NAME }} \
+            --run-configuration '{"ApplicationRestoreConfiguration":{"ApplicationRestoreType":"SKIP_RESTORE_FROM_SNAPSHOT"}}'
+          echo "KDA application restarted."

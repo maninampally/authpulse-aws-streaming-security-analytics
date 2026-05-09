@@ -42,34 +42,33 @@ Need durable, scalable event streaming buffer between producer and processor.
 Need stream processing engine for real-time transformations and aggregations.
 
 ### Options Considered
-1. **Apache Spark Structured Streaming** (PySpark)
-2. Apache Flink (Python DataStream API or Java)
+1. **Apache Flink** (PyFlink SQL Table API via Managed Service for Apache Flink / KDA v2)
+2. **Apache Spark Structured Streaming** (PySpark on EMR)
 
-### Decision: PySpark on EMR
+### Decision: Both — Flink as primary, PySpark as secondary
 
 ### Rationale
-**Pros:**
-- Unified batch + streaming API (same code for both)
-- Rich DataFrame API (SQL-like transformations)
-- Native Iceberg support (Spark 3.5+)
-- EMR provides managed runtime
-- Python ecosystem (easier development)
-- Mature stateful processing (mapGroupsWithState)
 
-**Cons:**
-- Micro-batch model (not true streaming like Flink)
-- Higher latency than Flink (30s trigger interval vs. millisecond in Flink)
+**Flink (Primary — KDA v2):**
+- **True streaming** (record-at-a-time, not micro-batch) → lower latency
+- **Fully managed** by AWS (no cluster to operate, auto-scaling, checkpointing)
+- **SQL Table API** allows declarative windowing and joins with minimal code
+- Keyed state (MapState) enables per-user device history without external lookups
+- Tightly integrated with Kinesis (native FlinkKinesisConsumer)
+- Deployed and versioned via Terraform (`modules/kda_flink`)
 
-**Why not Flink:**
-- Lower-level API (more code for same logic)
-- Less mature Iceberg integration
-- Requires Kinesis Data Analytics (KDA) or self-managed deployment
-- Python API less mature than PySpark
+**PySpark on EMR (Secondary — backfill/batch path):**
+- Unified batch + streaming API — same risk logic reused for historical replay
+- Native Iceberg write support via Spark 3.5+
+- Better for large historical backfills (full LANL dataset replay)
+- `streaming/spark_streaming_job.py` provides this path
 
-**Acceptable Trade-off:**
-- 30-60 second latency meets our 5-minute SLA
-- Micro-batching simplifies state management
-- For sub-second latency requirements, would reconsider Flink
+**Trade-offs accepted:**
+- PyFlink Python API is less mature than Java/Scala Flink — mitigated by using SQL Table API
+- Managing two runtimes (Flink + Spark) adds complexity — acceptable because they serve distinct roles
+- Flink KDA v2 requires JAR dependencies in the job ZIP — documented in runbook
+
+**Outcome:** Sub-30s end-to-end latency on the Flink path; 5-minute SLA is comfortably met.
 
 ---
 

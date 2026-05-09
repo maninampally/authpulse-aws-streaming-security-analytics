@@ -1,19 +1,100 @@
 name: cd-infra
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+  pull_request:
+    paths:
+      - 'infra/terraform/**'
   workflow_dispatch:
 
+env:
+  TF_WORKING_DIR: infra/terraform/envs/dev
+  AWS_REGION: us-east-1
+
 jobs:
-  terraform:
+  plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
-      - name: Terraform Init (dev)
-        run: |
-          cd infra/terraform/envs/dev
-          terraform init
-      - name: Terraform Plan (dev)
-        run: |
-          cd infra/terraform/envs/dev
-          terraform plan
+        with:
+          terraform_version: "~1.5"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
+        run: terraform plan -out=tfplan -input=false
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 3
+
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: plan
+    # Only apply on pushes to main (not on PRs)
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment: dev   # requires manual approval in GitHub if a protection rule is set
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.5"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_alert_email: ${{ secrets.TF_VAR_ALERT_EMAIL }}
+        run: terraform apply -auto-approve tfplan
