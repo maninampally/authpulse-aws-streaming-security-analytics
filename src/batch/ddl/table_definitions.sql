@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS authpulse.auth_events_raw (
   event_date  STRING      COMMENT 'Partition column yyyy-MM-dd'
 )
 PARTITIONED BY (event_date)
-LOCATION 's3://authpulse-dev-lakehouse-289591071327/raw/auth_events/'
+LOCATION 's3://authpulse-dev-lakehouse/raw/auth_events/'
 TBLPROPERTIES (
   'table_type' = 'ICEBERG',
   'format'     = 'parquet',
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS authpulse.auth_events_curated (
   event_date              STRING     COMMENT 'Partition column yyyy-MM-dd'
 )
 PARTITIONED BY (event_date)
-LOCATION 's3://authpulse-dev-lakehouse-289591071327/curated/auth_events_curated/'
+LOCATION 's3://authpulse-dev-lakehouse/curated/auth_events_curated/'
 TBLPROPERTIES (
   'table_type' = 'ICEBERG',
   'format'     = 'parquet',
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS authpulse.user_behavior_hourly (
   has_new_device BOOLEAN   COMMENT 'Any new device seen in window'
 )
 PARTITIONED BY (window_size)
-LOCATION 's3://authpulse-dev-lakehouse-289591071327/features/auth_user_features/'
+LOCATION 's3://authpulse-dev-lakehouse/features/auth_user_features/'
 TBLPROPERTIES (
   'table_type' = 'ICEBERG',
   'format'     = 'parquet',
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS authpulse.host_popularity_daily (
   is_rare        BOOLEAN  COMMENT 'True if access_count below rarity threshold'
 )
 PARTITIONED BY (event_date)
-LOCATION 's3://authpulse-dev-lakehouse-289591071327/curated/host_popularity_daily/'
+LOCATION 's3://authpulse-dev-lakehouse/curated/host_popularity_daily/'
 TBLPROPERTIES (
   'table_type' = 'ICEBERG',
   'format'     = 'parquet',

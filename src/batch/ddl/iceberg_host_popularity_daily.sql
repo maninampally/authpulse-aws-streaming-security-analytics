@@ -1,19 +1,16 @@
--- Day 8: Athena + Glue Catalog (Iceberg)
--- Creates the host popularity table (daily aggregates) for later population.
+-- AuthPulse - Host Popularity Daily Table DDL
+-- Run each statement separately in Athena Query Editor (engine v3).
 
-CREATE DATABASE IF NOT EXISTS lakehouse;
+-- Statement 1: database (skip if already created)
+CREATE DATABASE IF NOT EXISTS authpulse
+COMMENT 'AuthPulse streaming lakehouse database';
 
-CREATE TABLE IF NOT EXISTS lakehouse.host_popularity_daily (
-  event_date      date,
-  host_id         string,
-  distinct_users  bigint,
-  total_events    bigint
+-- Statement 2: host popularity daily aggregates
+CREATE TABLE IF NOT EXISTS authpulse.host_popularity_daily (
+  event_date     DATE,
+  host_id        VARCHAR,
+  distinct_users BIGINT,
+  total_events   BIGINT
 )
-PARTITIONED BY (
-  event_date
-)
-LOCATION 's3://authpulse-dev-curated/host_popularity_daily/'
-TBLPROPERTIES (
-  'table_type'='ICEBERG',
-  'format'='parquet'
-);
+LOCATION 's3://authpulse-dev-lakehouse-604743481383/curated/host_popularity_daily/'
+TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'parquet');

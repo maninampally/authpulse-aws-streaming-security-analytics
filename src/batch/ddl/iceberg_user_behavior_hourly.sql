@@ -1,23 +1,19 @@
--- Day 8: Athena + Glue Catalog (Iceberg)
--- Creates the per-user behavior feature table (hourly / windowed features).
+-- AuthPulse - User Behavior Hourly Table DDL
+-- Run each statement separately in Athena Query Editor (engine v3).
 
-CREATE DATABASE IF NOT EXISTS lakehouse;
+-- Statement 1: database (skip if already created)
+CREATE DATABASE IF NOT EXISTS authpulse
+COMMENT 'AuthPulse streaming lakehouse database';
 
-CREATE TABLE IF NOT EXISTS lakehouse.user_behavior_hourly (
-  window_start   timestamp,
-  window_end     timestamp,
-  user_id        string,
-  window_size    string,      -- e.g. '1h' | '24h'
-  unique_hosts   bigint,
-  event_count    bigint,
-  has_new_device boolean
+-- Statement 2: per-user hourly behavior features
+CREATE TABLE IF NOT EXISTS authpulse.user_behavior_hourly (
+  window_start   TIMESTAMP(6),
+  window_end     TIMESTAMP(6),
+  user_id        VARCHAR,
+  window_size    VARCHAR,
+  unique_hosts   BIGINT,
+  event_count    BIGINT,
+  has_new_device BOOLEAN
 )
-PARTITIONED BY (
-  day(window_start),
-  window_size
-)
-LOCATION 's3://authpulse-dev-curated/auth_user_features/'
-TBLPROPERTIES (
-  'table_type'='ICEBERG',
-  'format'='parquet'
-);
+LOCATION 's3://authpulse-dev-lakehouse-604743481383/features/auth_user_features/'
+TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'parquet');

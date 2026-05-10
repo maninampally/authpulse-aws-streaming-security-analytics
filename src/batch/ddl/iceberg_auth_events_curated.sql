@@ -1,26 +1,26 @@
--- Day 8: Athena + Glue Catalog (Iceberg)
--- Creates the curated, risk-enriched auth events table.
+-- AuthPulse - Auth Events Curated Table DDL
+-- Canonical copy of the curated table definition.
+-- Prefer iceberg_auth_events.sql which creates both raw + curated in one file.
+-- Run each statement separately in Athena Query Editor (engine v3).
 
-CREATE DATABASE IF NOT EXISTS lakehouse;
+-- Statement 1: database (skip if already created)
+CREATE DATABASE IF NOT EXISTS authpulse
+COMMENT 'AuthPulse streaming lakehouse database';
 
-CREATE TABLE IF NOT EXISTS lakehouse.auth_events_curated (
-  event_time               timestamp,
-  user_id                  string,
-  src_host                 string,
-  dst_host                 string,
-  success                  boolean,
-  window_1h_event_count    bigint,
-  window_1h_unique_hosts   bigint,
-  window_24h_unique_hosts  bigint,
-  has_new_device           boolean,
-  risk_score               int,
-  risk_flags               array<string>
+-- Statement 2: curated events with risk enrichment
+CREATE TABLE IF NOT EXISTS authpulse.auth_events_curated (
+  event_time              TIMESTAMP(6),
+  user_id                 VARCHAR,
+  src_host                VARCHAR,
+  dst_host                VARCHAR,
+  success                 BOOLEAN,
+  window_1h_event_count   BIGINT,
+  window_1h_unique_hosts  BIGINT,
+  window_24h_unique_hosts BIGINT,
+  has_new_device          BOOLEAN,
+  risk_score              INT,
+  risk_flags              ARRAY(VARCHAR),
+  event_date              VARCHAR
 )
-PARTITIONED BY (
-  day(event_time)
-)
-LOCATION 's3://authpulse-dev-curated/auth_events_curated/'
-TBLPROPERTIES (
-  'table_type'='ICEBERG',
-  'format'='parquet'
-);
+LOCATION 's3://authpulse-dev-lakehouse-604743481383/curated/auth_events_curated/'
+TBLPROPERTIES ('table_type' = 'ICEBERG', 'format' = 'parquet');
