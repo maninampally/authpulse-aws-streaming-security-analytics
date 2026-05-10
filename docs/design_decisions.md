@@ -380,28 +380,34 @@ Need operational visibility and SLA enforcement.
 
 ---
 
-## Decision 9: PyFlink Deployment Packaging on KDA
+## Decision 11: PyFlink on KDA → Replaced by Lambda Consumer
 
 ### Context
-KDA Managed Service for Apache Flink requires specific artifact packaging for PyFlink jobs.
+Original design used Apache Flink (KDA v2) as the primary streaming engine. After deploying infrastructure, PyFlink packaging on KDA proved unworkable without a Maven CI pipeline.
 
 ### Problem Encountered
-Bundling connector JARs inside the Python ZIP causes KDA to treat the JAR as the main application artifact and fail with `Neither a 'Main-Class', nor a 'program-class' entry was found`.
+KDA requires a fat JAR with a valid `Main-Class` manifest entry. Bundling connector JARs inside the Python ZIP causes KDA to fail with `Neither a 'Main-Class', nor a 'program-class' entry was found`. Building a correct Maven fat JAR requires a full Java build pipeline (not a Python-only workflow).
 
-### Decision: Spark path for demo; Flink requires Maven build pipeline
+### Decision: AWS Lambda as primary streaming consumer
 
 ### Rationale
-PyFlink on KDA requires either:
-- A fat JAR built via Maven with the PyFlink runner as `Main-Class`, referencing Python script via `--pyFiles`
-- OR connector JARs supplied separately via `FlinkRunConfiguration.--jarfile`, not bundled in the Python ZIP
+Lambda with Kinesis Event Source Mapping delivers equivalent business value with far simpler deployment:
+- No JAR packaging — pure Python 3.11
+- DynamoDB replaces Flink keyed state (per-user sliding windows)
+- Kinesis ESM provides batching, retry, bisect-on-error
+- Deployed and versioned via Terraform (`modules/lambda_consumer`)
 
-For a build pipeline, the correct approach is to generate the fat JAR in CI (GitHub Actions Maven step) and upload to S3 before `terraform apply`.
+**Trade-offs accepted:**
+- Lambda has 15-min timeout (not relevant — batches complete in < 60s)
+- No true streaming watermarks — TTL-based DynamoDB state is equivalent for this use case
+- Micro-batch latency (~42s measured) vs. sub-second Flink — acceptable for 5-min SLA
 
 ### Current Status
-- Kinesis stream, S3, Glue Iceberg tables, IAM, monitoring — all live in `us-east-1`
-- Producer → Kinesis: validated (8 events, 0 failures)
-- Flink app: deployed but not running (packaging fix pending)
-- Demo path: use `src/stream/spark/main_job.py` on EMR for risk scoring
+- Lambda `authpulse-dev-auth-processor`: ACTIVE, Kinesis ESM Enabled
+- DynamoDB `authpulse-dev-user-state`: PAY_PER_REQUEST with 7-day TTL
+- End-to-end validated: 8 events → Kinesis → Lambda → DynamoDB → S3 raw + curated
+- Athena queryable via `authpulse.auth_events_curated_json` (partition projection)
+- `src/stream/flink/main_job.py` retained as reference implementation
 
 ---
 

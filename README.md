@@ -1,532 +1,224 @@
 # AuthPulse: Real-Time Authentication Risk & Behavior Analytics
+
 ### Production-Grade AWS Streaming Lakehouse for Security Analytics
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![Apache Flink](https://img.shields.io/badge/Apache%20Flink-1.18+-purple.svg)](https://flink.apache.org/)
-[![Apache Iceberg](https://img.shields.io/badge/Apache%20Iceberg-1.4+-blue.svg)](https://iceberg.apache.org/)
-[![Terraform](https://img.shields.io/badge/Terraform-1.5+-623CE4.svg)](https://www.terraform.io/)
-[![AWS](https://img.shields.io/badge/AWS-Kinesis%20%7C%20KDA%20%7C%20S3-yellow.svg)](https://aws.amazon.com/)
-
-AuthPulse is a **production-grade real-time streaming analytics platform** that processes enterprise authentication events to detect security anomalies, compute risk scores, and generate actionable insights for security operations teams.
-
-Built with **Apache Flink on Managed Service for Apache Flink (KDA v2)** as the primary streaming engine, with a PySpark/EMR path for batch and historical replay. Infrastructure is fully provisioned with **Terraform**. It demonstrates modern data engineering best practices for high-throughput event processing, stateful stream analytics, and lakehouse architecture on AWS.
-
-**Pipeline Architecture:**
-```
-LANL Dataset → Kinesis Streams → Managed Apache Flink (KDA) → S3 Iceberg Tables → Athena/QuickSight
-```
-
-**Key Capabilities:**
-- Real-time stream processing (1k-10k events/sec)
-- Rule-based risk engine (lateral movement, burst login, new device detection)
-- Apache Iceberg lakehouse with ACID guarantees
-- Sub-5-minute end-to-end latency (SLA-enforced)
-- Production monitoring with CloudWatch + SNS alerts
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg)](https://www.python.org/)
+[![AWS Lambda](https://img.shields.io/badge/AWS-Lambda-FF9900.svg)](https://aws.amazon.com/lambda/)
+[![Apache Iceberg](https://img.shields.io/badge/Apache%20Iceberg-1.4+-0B6E4F.svg)](https://iceberg.apache.org/)
+[![Terraform](https://img.shields.io/badge/Terraform-1.5+-7B42BC.svg)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/AWS-Kinesis%20|%20Lambda%20|%20DynamoDB%20|%20S3-FF9900.svg)](https://aws.amazon.com/)
 
 ---
 
-## 📋 Table of Contents
+AuthPulse is a **production-grade, event-driven streaming analytics platform** on AWS that ingests enterprise authentication logs in real time, computes behavioral risk features per user, scores threats using a rule-based risk engine, and writes enriched results to an Apache Iceberg lakehouse queryable via Athena.
 
-- [Business Problem](#-business-problem)
-- [Dataset](#-dataset)
-- [Architecture](#-architecture)
-- [Technology Stack](#-technology-stack)
-- [Project Structure](#-project-structure)
-- [Key Features](#-key-features)
-- [Risk Detection Rules](#-risk-detection-rules)
-- [Data Model](#-data-model)
-- [Getting Started](#-getting-started)
-- [Usage](#-usage)
-- [Monitoring & SLAs](#-monitoring--slas)
-- [Design Decisions](#-design-decisions)
-- [Resume Impact](#-resume-impact)
-- [Future Enhancements](#-future-enhancements)
+> **Live pipeline:** LANL 708M+ event dataset replayed into Kinesis → Lambda consumer computes per-user sliding windows via DynamoDB → risk-scored output lands in S3 → queryable in Athena within ~42 seconds end-to-end.
 
 ---
 
-## 🧱 Terraform (Dev Infra)
+## Table of Contents
 
-Terraform lives in `infra/terraform` and is composed per-environment under `infra/terraform/envs/*`.
-
-For Windows/PowerShell, use the repo wrapper (auto-finds Terraform, runs init/fmt/validate/plan):
-
-- Plan dev: `./scripts/terraform.ps1 -Env dev -Action plan`
-- Apply dev: `./scripts/terraform.ps1 -Env dev -Action apply`
-
-If you use multiple AWS accounts, target a specific AWS CLI profile:
-
-- Plan dev (profile): `./scripts/terraform.ps1 -Env dev -Action plan -AwsProfile <profile>`
-- Apply dev (profile): `./scripts/terraform.ps1 -Env dev -Action apply -AwsProfile <profile>`
-
-Note: `terraform apply` creates AWS resources (costs possible).
-
----
-
-## 🎯 Business Problem
-
-Security teams need **real-time visibility** into authentication behavior to detect risky patterns:
-
-- **Lateral Movement**: Attackers pivoting through network after initial compromise
-- **Burst Logins**: Abnormal authentication spikes indicating automation or credential stuffing
-- **New Device Spikes**: First-time access from unfamiliar computers
-- **Rare Host Access**: Targeting of sensitive/uncommon systems
-- **Unusual Behavior**: Deviation from established user patterns
-
-**The Challenge:** Traditional batch-based log analysis detects threats **hours or days late**.
-
-**The Solution:** AuthPulse provides **sub-5-minute detection** using streaming analytics, enabling:
-- **Real-time alerting** for security operations centers (SOC)
-- **Live dashboards** for operational monitoring
-- **Historical investigations** via SQL-queryable lakehouse
+- [Business Problem](#business-problem)
+- [Architecture](#architecture)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Pipeline Walkthrough](#pipeline-walkthrough)
+- [Risk Engine](#risk-engine)
+- [Data Model](#data-model)
+- [Infrastructure (Terraform)](#infrastructure-terraform)
+- [Getting Started](#getting-started)
+- [Running the Pipeline](#running-the-pipeline)
+- [Querying Data in Athena](#querying-data-in-athena)
+- [Monitoring & SLAs](#monitoring--slas)
+- [Design Decisions](#design-decisions)
+- [Portfolio & Resume Talking Points](#portfolio--resume-talking-points)
+- [Future Enhancements](#future-enhancements)
 
 ---
 
-## 📊 Dataset
+## Business Problem
 
-This project uses the **LANL "User-Computer Authentication Associations in Time" dataset**.
+Security teams need **real-time visibility** into authentication behavior to catch threats before damage is done. Traditional batch-based SIEM analysis detects anomalies hours or days late — too slow for active intrusions.
 
-Each record is:
+**AuthPulse solves this with sub-5-minute detection:**
 
-```
-time,user,computer
-```
+| Threat Pattern | What It Looks Like | AuthPulse Rule |
+|---|---|---|
+| Lateral Movement | User touches 10+ hosts in 1 hour | `lateral_movement` |
+| Credential Stuffing | 50+ logins in 1 hour | `burst_login` |
+| New Device Access | First-ever host for this user | `rare_host` |
+| Device Flooding | New device + 25+ hosts in 24h | `new_device_spike` |
 
-representing a successful authentication by a user to a computer at a given time.
-
-Key facts:
-
-- 9 months of enterprise activity
-- 708M+ authentication events
-- 11k+ users
-- 22k+ computers
-- timestamps at 1-second resolution
-
-Dataset source:
-
-https://csr.lanl.gov/data/auth/
-
-The dataset is replayed as a live event stream into Amazon Kinesis to simulate production traffic.
+**Dataset:** [LANL User-Computer Authentication Associations](https://csr.lanl.gov/data/auth/) — 708M+ events, 9 months, 11k+ users, 22k+ computers. Replayed as a live stream into Kinesis to simulate production traffic.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
-```
-┌──────────────┐
-│ LANL Dataset │
-│   (708M+)    │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────────┐
-│ Replay Producer  │ Python boto3
-│ (JSON events)    │ Rate-controlled
-└──────┬───────────┘
-       │
-       ▼
-┌──────────────────┐
-│ Kinesis Streams  │ 2-5 shards
-│                  │ 24h retention
-└──────┬───────────┘
-       │
-       ▼
-┌──────────────────────────────┐
-│  Amazon EMR (Spark 3.5)      │
-│  ┌────────────────────────┐  │
-│  │ PySpark Streaming Job  │  │
-│  │ • Parse & Validate     │  │
-│  │ • Deduplication        │  │
-│  │ • Rolling Windows      │  │
-│  │ • Stateful Aggregates  │  │
-│  │ • Risk Engine          │  │
-│  └────────────────────────┘  │
-└──────┬────────────────────────┘
-       │
-       ├─────────┬──────────┐
-       ▼         ▼          ▼
-  ┌────────┐ ┌────────┐ ┌────────┐
-  │ S3 Raw │ │ S3     │ │ S3     │
-  │ Zone   │ │Curated │ │Aggreg. │
-  │(Parquet)│ │(Iceberg)│ │(Iceberg)│
-  └────────┘ └───┬────┘ └───┬────┘
-                 │           │
-                 ▼           ▼
-          ┌──────────────────────┐
-          │ AWS Glue Catalog     │
-          └──────┬───────────────┘
-                 │
-        ┌────────┴────────┐
-        ▼                 ▼
- ┌─────────────┐   ┌─────────────┐
- │   Athena    │   │ QuickSight  │
- │ (SQL Query) │   │ (Dashboard) │
- └─────────────┘   └─────────────┘
+![AuthPulse Architecture](docs/architecture-diagram.png)
 
-  ┌────────────────────────┐
-  │  CloudWatch + SNS      │
-  │  (Metrics & Alerts)    │
-  └────────────────────────┘
-```
+> **Flow:** LANL Dataset → Replay Producer (Python) → Amazon Kinesis Data Streams → AWS Lambda (risk engine) ↔ Amazon DynamoDB (user state) → S3 Raw + Curated → AWS Glue Catalog → Amazon Athena → QuickSight. CloudWatch + SNS monitors the full stack.
 
-### Component Details
+### Component Summary
 
-| Component | Technology | Purpose |
-|-----------|------------|----------|
-| **Ingestion** | Amazon Kinesis Data Streams | Durable event buffer, 1MB/s per shard |
-| **Streaming (primary)** | Apache Flink on KDA v2 | Low-latency stateful stream processing |
-| **Streaming (secondary)** | PySpark on Amazon EMR | Batch replay + historical backfill |
-| **Infrastructure** | Terraform >= 1.5 | Full IaC for all AWS resources |
-| **Storage** | S3 + Apache Iceberg | ACID lakehouse with schema evolution |
-| **Catalog** | AWS Glue Data Catalog | Centralized metadata for Athena/QuickSight |
-| **Query** | Amazon Athena | Serverless SQL for ad-hoc investigations |
-| **Visualization** | Amazon QuickSight | Real-time dashboards with SPICE |
-| **Monitoring** | CloudWatch + SNS | Metrics, logs, and SLA alerts |
+| Layer | Service | Role |
+|---|---|---|
+| **Ingestion** | Amazon Kinesis Data Streams | Durable stream buffer — 1 shard, 24h retention |
+| **Stream Processing** | AWS Lambda (Python 3.11) | Kinesis ESM trigger — feature computation + risk scoring |
+| **State Store** | Amazon DynamoDB | Per-user sliding window state (1h / 24h) with 7-day TTL |
+| **Raw Storage** | Amazon S3 | JSONL.GZ output partitioned by `event_date` |
+| **Curated Storage** | Amazon S3 | Risk-enriched JSONL.GZ partitioned by `event_date` |
+| **Catalog** | AWS Glue Data Catalog | Metadata for all Athena-queryable tables |
+| **Query** | Amazon Athena (engine v3) | Serverless SQL with partition projection |
+| **Visualization** | Amazon QuickSight | Security dashboards via SPICE |
+| **Batch / Backfill** | PySpark on Amazon EMR | Historical replay + Iceberg aggregation jobs |
+| **Infrastructure** | Terraform >= 1.5 | Full IaC — all AWS resources declared and versioned |
+| **Monitoring** | CloudWatch + SNS | Alarms on lag, error rate, risk spikes |
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
-### Core Technologies
-- **Python 3.11+** - Primary development language
-- **Apache Flink 1.18+** - Primary streaming runtime (PyFlink SQL Table API)
-- **PySpark 3.5+** - Secondary path: batch replay and historical backfill on EMR
-- **Apache Iceberg 1.4+** - Lakehouse table format with ACID guarantees
-- **Terraform >= 1.5** - Infrastructure as Code for all AWS resources
+**Languages & Frameworks**
+- Python 3.11 — Lambda consumer, producer, batch jobs
+- PySpark 3.5 — batch aggregations and historical backfill (EMR)
+- SQL — Athena DDL, Iceberg table definitions, quality checks
 
-### AWS Services
-- **Amazon Kinesis Data Streams** - Event ingestion (no Kafka/MSK)
-- **Managed Service for Apache Flink (KDA v2)** - Serverless Flink runtime
-- **Amazon EMR** - Managed Spark cluster for batch/backfill path
-- **Amazon S3** - Raw and curated data zones
-- **AWS Glue Data Catalog** - Metadata repository
-- **Amazon Athena** - Serverless SQL queries
-- **Amazon QuickSight** - Business intelligence dashboards
-- **Amazon CloudWatch** - Metrics and logging
-- **Amazon SNS** - Alert notifications
+**AWS Services**
+- Amazon Kinesis Data Streams
+- AWS Lambda + Kinesis Event Source Mapping
+- Amazon DynamoDB (PAY_PER_REQUEST + TTL)
+- Amazon S3
+- AWS Glue Data Catalog
+- Amazon Athena (engine v3)
+- Amazon QuickSight
+- Amazon CloudWatch + SNS
+- Amazon EMR (batch path)
 
-### Key Libraries
-- `boto3` - AWS SDK for Python
-- `pyflink` - Flink SQL Table API (runtime-provided on KDA)
-- `pyspark` - DataFrame API and Structured Streaming (runtime-provided on EMR)
-- `pyarrow` - Parquet file format support
+**Data & Storage**
+- Apache Iceberg 1.4+ — ACID lakehouse format
+- JSONL.GZ — Lambda output format (raw + curated zones)
+- Partition Projection — zero-cost partition discovery in Athena
+
+**Tooling**
+- Terraform >= 1.5 — IaC for all AWS resources
+- boto3 — AWS SDK for Python
+- Pydantic — event model validation
+- pytest — unit + integration testing
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 authpulse-aws-streaming-security-analytics/
 │
 ├── src/
 │   ├── producer/
-│   │   ├── replay_lanl.py              # Kinesis event replay (primary entry)
-│   │   └── config_loader.py            # Config from YAML / env vars
+│   │   ├── replay_lanl.py              # Kinesis replay — reads LANL dataset, sends to Kinesis
+│   │   └── config_loader.py            # YAML + env var config loader
+│   │
+│   ├── lambda_consumer/                # PRIMARY streaming consumer
+│   │   ├── handler.py                  # Lambda entry point (Kinesis ESM)
+│   │   ├── features.py                 # DynamoDB state reads/writes + sliding window logic
+│   │   ├── sink.py                     # S3 JSONL.GZ writer (raw + curated partitioned paths)
+│   │   └── lambda_consumer.zip         # Pre-built deployment artifact (used by Terraform)
+│   │
 │   ├── stream/
 │   │   ├── flink/
-│   │   │   └── main_job.py             # PyFlink SQL Table API job (KDA)
+│   │   │   └── main_job.py             # PyFlink SQL Table API job (reference implementation)
 │   │   ├── spark/
-│   │   │   └── main_job.py             # PySpark Structured Streaming job
-│   │   ├── risk_rules.py               # Rule-based risk scoring logic
-│   │   ├── state_manager.py            # Flink keyed state management
-│   │   ├── schemas.py                  # PySpark StructType schemas
-│   │   ├── config.py                   # Config dataclasses
-│   │   ├── risk_engine.py              # PySpark UDF risk engine wrapper
-│   │   └── window_metrics.py           # Rolling window aggregations
-│   ├── batch/                          # Daily batch aggregations
+│   │   │   └── main_job.py             # PySpark Structured Streaming job (batch/EMR path)
+│   │   ├── risk_rules.py               # Risk scoring logic — shared by Lambda + Flink + Spark
+│   │   └── state_manager.py            # State management utilities
+│   │
+│   ├── batch/
+│   │   ├── ddl/
+│   │   │   ├── iceberg_auth_events.sql         # Iceberg table DDL (Athena engine v3)
+│   │   │   ├── iceberg_auth_events_curated.sql
+│   │   │   ├── iceberg_user_behavior_hourly.sql
+│   │   │   ├── iceberg_host_popularity_daily.sql
+│   │   │   └── json_tables.sql                 # External JSON-backed tables with partition projection
+│   │   └── jobs/
+│   │       ├── user_behavior_hourly_job.py     # Hourly user aggregations (EMR)
+│   │       ├── host_popularity_daily_job.py    # Daily host stats (EMR)
+│   │       ├── backfill_partitions.py          # Historical partition backfill
+│   │       └── recompute_aggregates.py         # Recompute aggregates from raw
+│   │
 │   ├── common/
-│   │   ├── models.py                   # Pydantic event models
-│   │   ├── metrics.py                  # CloudWatch metric publishing
-│   │   └── logging_utils.py            # Structured JSON logging
+│   │   ├── models.py                   # Pydantic event models + LANL record parser
+│   │   ├── metrics.py                  # CloudWatch metric publishing helpers
+│   │   └── logging_utils.py            # Structured JSON logger
+│   │
 │   └── quality/
-│       └── run_quality_checks.py       # Great Expectations DQ checks
+│       └── run_quality_checks.py       # Data quality checks (completeness, freshness, schema)
 │
 ├── infra/terraform/
-│   ├── envs/dev/                       # Dev environment root module
-│   │   ├── main.tf                     # Wires all modules
-│   │   ├── variables.tf
-│   │   └── terraform.tfvars.example    # Template (gitignored .tfvars)
+│   ├── envs/dev/
+│   │   ├── main.tf                     # Root module — wires all child modules
+│   │   ├── variables.tf                # Input variable declarations
+│   │   ├── outputs.tf                  # Stack outputs (ARNs, names)
+│   │   └── terraform.tfvars.example    # Template — copy to terraform.tfvars and fill in
 │   └── modules/
-│       ├── kinesis/                    # Kinesis stream
-│       ├── s3/                         # Lakehouse S3 bucket
-│       ├── iam/                        # Execution roles
-│       ├── glue_iceberg/               # Glue DB + Iceberg table definitions
-│       ├── kda_flink/                  # Managed Service for Apache Flink
-│       └── monitoring/                 # CloudWatch alarms + SNS
-│
-├── tests/
-│   ├── unit/                           # pytest unit tests
-│   └── integration/                    # pytest integration tests (needs AWS)
+│       ├── kinesis/                    # Kinesis stream + shard config
+│       ├── s3/                         # Lakehouse bucket + lifecycle policies
+│       ├── iam/                        # Shared execution roles and policies
+│       ├── glue_iceberg/               # Glue database + Iceberg crawler config
+│       ├── lambda_consumer/            # Lambda function + DynamoDB + Kinesis ESM
+│       └── monitoring/                 # CloudWatch dashboard + alarms + SNS topic
 │
 ├── observability/
-│   ├── cloudwatch_dashboards.json      # CloudWatch dashboard JSON
+│   ├── cloudwatch_metrics.md           # Full metric catalog with alarm thresholds
+│   └── sla_checks.sql                  # SQL queries for SLA measurement
+│
+├── dashboards/
+│   └── kpi_definitions.md              # KPI definitions and measurement methodology
 │
 ├── docs/
-│   ├── architecture.md                 # System design
-│   ├── data_flow.md                    # Pipeline stage details
-│   ├── design_decisions.md             # ADRs (Architecture Decision Records)
-│   ├── data_contracts.md               # Event schema & field contracts
-│   ├── runbook_operations.md           # Ops runbook: deploy, alerts, rollback
-│   ├── sla_definition.md               # SLA targets and measurement
+│   ├── architecture-diagram.png        # AWS architecture diagram
+│   ├── design_decisions.md             # ADRs — technology choices with rationale
+│   ├── data_contracts.md               # Event schema and field contracts
+│   ├── runbook_operations.md           # Ops runbook — deploy, rollback, alerts
+│   └── sla_definition.md              # SLA targets and breach procedures
 │
-├── scripts/                            # PowerShell dev helpers
-│   ├── setup_env.ps1
-│   ├── run_tests.ps1
-│   ├── commit.ps1
-│   └── terraform.ps1
+├── scripts/
+│   ├── setup_env.ps1                   # Create venv + install deps (Windows)
+│   ├── run_tests.ps1                   # Run lint + pytest
+│   ├── commit.ps1                      # Stage + lint + commit helper
+│   └── terraform.ps1                   # Terraform wrapper (init/plan/apply/destroy)
 │
 ├── config/
 │   ├── dev.yaml                        # Dev environment config
 │   └── prod.yaml                       # Prod environment config
 │
-├── pyproject.toml                      # Python project + pytest config
-├── requirements.txt                    # Python dependencies
-└── README.md                           # This file
+├── pyproject.toml                      # Project metadata + pytest + ruff config
+├── requirements.txt                    # Python runtime dependencies
+└── README.md
 ```
 
 ---
 
-## ✨ Key Features
+## Pipeline Walkthrough
 
-### Real-Time Processing
-- **Throughput**: 1,000-10,000 events/sec
-- **Latency**: 30-60 seconds end-to-end (micro-batch)
-- **Watermarking**: 5-minute late event tolerance
-- **Exactly-once semantics**: Via Spark checkpointing
+The full pipeline has five stages. Here is exactly what happens for each authentication event from raw log to queryable result.
 
-### Stateful Analytics
-- **Rolling Windows**: 1-hour and 24-hour per-user metrics
-- **Device Tracking**: All-time history of computers per user
-- **Deduplication**: Event ID-based across watermark window
+### Stage 1 — Data Ingestion: Replay Producer → Kinesis
 
-### Risk Engine
-- **4 Detection Rules**: NEW_DEVICE, BURST_LOGIN, LATERAL_MOVEMENT, RARE_HOST
-- **Weighted Scoring**: Configurable risk score calculation
-- **Risk Levels**: LOW / MEDIUM / HIGH / CRITICAL classification
+`src/producer/replay_lanl.py` reads the LANL dataset (plain text, CSV, or `.bz2`) and sends events to Kinesis at a configurable rate.
 
-### Lakehouse Architecture
-- **Dual Zones**: Raw (archival) + Curated (analytics)
-- **ACID Transactions**: Iceberg prevents partial writes
-- **Schema Evolution**: Add/modify columns without rewrite
-- **Time Travel**: Query historical snapshots
-- **Partitioning**: Daily partitions for query efficiency
-
-### Production Monitoring
-- **SLA Enforcement**: Freshness < 5 min, Completeness < 0.1% invalid
-- **CloudWatch Metrics**: Kinesis lag, Spark batch duration, custom app metrics
-- **SNS Alerts**: Automatic notifications on threshold breaches
-
----
-
-## 🚨 Risk Detection Rules
-
-The risk engine applies **4 rule-based detections** with weighted scoring:
-
-### 1. NEW_DEVICE_SPIKE (Weight: 30)
-**Detection**: User authenticates from previously unseen computer
-**Business Logic**: First-time device may indicate:
-- Legitimate new device onboarding
-- Stolen credentials used remotely
-- Lateral movement by attacker
-
-### 2. BURST_LOGIN (Weight: 25)
-**Detection**: Login count > 50 within 1 hour
-**Business Logic**: Rapid successive logins may indicate:
-- Brute force attempts (successful auths)
-- Automated script behavior
-- Compromised account exploitation
-
-### 3. LATERAL_MOVEMENT (Weight: 35)
-**Detection**: Access to ≥10 distinct computers within 1 hour
-**Business Logic**: Accessing many hosts quickly indicates:
-- Attacker pivoting through network
-- Reconnaissance activity
-- Privilege escalation attempts
-
-### 4. RARE_HOST (Weight: 10)
-**Detection**: Authentication to statistically infrequent host (bottom 5% popularity)
-**Business Logic**: Accessing rarely-used hosts may indicate:
-- Access to sensitive admin systems
-- Unusual behavior deviation
-- Targeting of high-value assets
-
-### Risk Score Calculation
 ```
-risk_score = (is_new_device × 30) + (is_burst_login × 25) + 
-             (is_lateral_movement × 35) + (is_rare_host × 10)
+LANL record:  1,U1,C1
+↓
+Pydantic model: AuthEvent(event_id, event_time, user_id, computer_id)
+↓
+JSON payload → Kinesis PutRecords (batch 200, partition key = user_id)
 ```
 
-**Risk Levels**:
-- **LOW**: 0-25
-- **MEDIUM**: 26-50
-- **HIGH**: 51-75
-- **CRITICAL**: 76+
-
----
-
-## 📊 Data Model
-
-### Table: `auth_events_curated` (Iceberg)
-**Purpose**: Enriched events with risk analytics
-
-| Column | Type | Description |
-|--------|------|-------------|
-| event_id | STRING | Unique identifier (SHA256) |
-| event_time | TIMESTAMP | Authentication timestamp (UTC) |
-| user_id | STRING | User identifier |
-| computer_id | STRING | Computer/host identifier |
-| ingestion_time | TIMESTAMP | Kinesis ingestion timestamp |
-| login_count_1h | LONG | Rolling 1-hour login count |
-| login_count_24h | LONG | Rolling 24-hour login count |
-| unique_computers_1h | LONG | Distinct computers in 1 hour |
-| unique_computers_24h | LONG | Distinct computers in 24 hours |
-| is_new_device | INT | 1 if first-time computer |
-| is_burst_login | INT | 1 if burst detected |
-| is_lateral_movement | INT | 1 if lateral movement detected |
-| is_rare_host | INT | 1 if rare host accessed |
-| risk_flags | ARRAY<STRING> | Triggered risk rules |
-| risk_score | INT | Weighted risk score (0-100) |
-| risk_level | STRING | LOW/MEDIUM/HIGH/CRITICAL |
-| processing_time | TIMESTAMP | Spark processing timestamp |
-| event_date | DATE | Partition column (YYYY-MM-DD) |
-
-**Partitioning**: Daily by `event_date`  
-**Format**: Apache Iceberg with ACID guarantees
-
-### Table: `user_behavior_hourly` (Iceberg)
-**Purpose**: Hourly user activity aggregations
-
-| Column | Type | Description |
-|--------|------|-------------|
-| window_start | TIMESTAMP | Hour window start |
-| window_end | TIMESTAMP | Hour window end |
-| user_id | STRING | User identifier |
-| total_logins | LONG | Authentication count |
-| unique_computers | LONG | Distinct hosts accessed |
-| anomaly_count | LONG | Events with risk_score > 0 |
-| total_risk_score | LONG | Sum of all risk scores |
-| max_risk_score | INT | Highest single risk score |
-
-### Table: `host_popularity_daily` (Iceberg)
-**Purpose**: Daily host access statistics
-
-| Column | Type | Description |
-|--------|------|-------------|
-| date | DATE | Aggregation date |
-| computer_id | STRING | Computer/host identifier |
-| unique_users | LONG | Distinct users accessed |
-| total_logins | LONG | Total authentication count |
-| high_risk_events | LONG | Count of HIGH/CRITICAL events |
-
-**Use Case**: Support rare host detection by computing percentile ranks.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-1. **AWS Account** with appropriate permissions:
-   - Kinesis: CreateStream, PutRecords
-   - EMR: CreateCluster, SubmitStep
-   - S3: CreateBucket, PutObject, GetObject
-   - Glue: CreateDatabase, CreateTable
-   - Athena: StartQueryExecution
-   - IAM: CreateRole, AttachRolePolicy
-
-2. **AWS CLI** configured:
-```bash
-aws configure
-aws sts get-caller-identity  # Verify credentials
-```
-
-3. **Python 3.11+** installed locally
-
-4. **LANL Dataset**: Download from https://csr.lanl.gov/data/auth/
-   - Place in `data/raw/auth.txt` (gitignored)
-
-### Installation
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/authpulse-aws-streaming-security-analytics.git
-cd authpulse-aws-streaming-security-analytics
-
-# Install Python dependencies
-pip install -r requirements.txt
-```
-
-### Local Development (Windows)
-
-```powershell
-# Create venv + install dev deps
-./scripts/setup_env.ps1
-
-# Run lint + unit tests
-./scripts/run_tests.ps1
-
-# Run lint/tests, stage changes, and commit
-./scripts/commit.ps1 -All -Message "chore: update docs"
-```
-
----
-
-## 💻 Usage
-
-### Step 1: Provision AWS Infrastructure (Terraform)
-
-All AWS resources (Kinesis, S3, Glue, KDA Flink app, IAM, CloudWatch alarms) are created via Terraform.
-
-```powershell
-# Windows (PowerShell wrapper)
-cd infra/terraform/envs/dev
-
-# Copy example vars and fill in your account-specific values
-copy terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars: set alert_email and AWS account ID
-
-# Plan + apply (creates all AWS resources)
-.\..\..\..\scripts\terraform.ps1 -Env dev -Action plan
-.\..\..\..\scripts\terraform.ps1 -Env dev -Action apply
-```
-
-This creates:
-- Kinesis stream: `authpulse-dev-stream`
-- S3 bucket: `authpulse-dev-lakehouse-<account-id>`
-- Glue database: `authpulse`
-- KDA Flink application: `authpulse-dev-flink-app`
-- CloudWatch alarms + SNS topic
-
-> **Note**: `terraform apply` creates real AWS resources (costs apply). Destroy with `terraform destroy` when done.
-
-### Step 2: Run Iceberg DDL in Athena
-
-```bash
-# Open Athena in AWS Console, run the contents of:
-cat src/batch/ddl/iceberg_auth_events.sql
-# Or via CLI:
-aws athena start-query-execution \
-  --query-string file://src/batch/ddl/iceberg_auth_events.sql \
-  --result-configuration OutputLocation=s3://authpulse-dev-lakehouse-<account-id>/athena-results/
-```
-
-### Step 3: Upload Flink Job & Start Application
-
-```bash
-# Package the Flink job
-cd src/stream/flink
-zip -r authpulse-flink-job.zip *.py ../risk_rules.py ../state_manager.py
-
-# Upload to S3
-aws s3 cp authpulse-flink-job.zip \
-  s3://authpulse-dev-lakehouse-<account-id>/flink-app/authpulse-flink-job.zip
-
-# Start the KDA Flink application
-aws kinesisanalyticsv2 start-application \
-  --application-name authpulse-dev-flink-app \
-  --run-configuration '{"ApplicationRestoreConfiguration":{"ApplicationRestoreType":"SKIP_RESTORE_FROM_SNAPSHOT"}}'
-```
-
-### Step 4: Start Event Replay Producer
+**Features:**
+- Rate control — sleeps between batches to hit target events/sec
+- Exponential backoff retry on Kinesis throttling (up to 5 attempts)
+- Checkpoint to JSON file — resume from last position with `--resume`
+- `--dry-run` mode — parse and validate without sending
 
 ```bash
 python src/producer/replay_lanl.py \
@@ -537,203 +229,558 @@ python src/producer/replay_lanl.py \
   --max-events 100000
 ```
 
-**Options**:
-- `--rate`: Events per second (default: 2000)
-- `--batch-size`: Records per `put_records` call (default: 500)
-- `--max-events`: Stop after N events (useful for testing)
-- `--dry-run`: Parse and validate without sending to Kinesis
+---
 
-### Step 6: Query Data in Athena
+### Stage 2 — Stream Processing: Lambda Consumer
+
+`src/lambda_consumer/handler.py` is triggered by the Kinesis Event Source Mapping (batch size 100, window 30s, bisect-on-error, max 3 retries).
+
+**Per-record processing:**
+
+```
+Kinesis record (base64)
+↓ decode + JSON parse
+↓ get_state(user_id)        ← DynamoDB read
+↓ compute_features(state)   ← sliding window calculation
+↓ compute_risk(features)    ← risk rule evaluation
+↓ update_state(user_id)     ← DynamoDB write (TTL = 7 days)
+↓ append to raw_records + curated_records
+↓ write_batch(raw, curated) ← S3 write (JSONL.GZ)
+```
+
+**Lambda configuration:**
+- Runtime: Python 3.11
+- Memory: 512 MB
+- Timeout: 60 seconds
+- Concurrency: up to 1 per Kinesis shard
+
+---
+
+### Stage 3 — Stateful Feature Computation: DynamoDB
+
+`src/lambda_consumer/features.py` maintains per-user state in DynamoDB.
+
+**State schema per user:**
+
+```json
+{
+  "user_id": "U1",
+  "events": [
+    {"ts": 1234567890, "host": "C1"},
+    ...
+  ],
+  "known_hosts": ["C1", "C2", ...],
+  "ttl": 1235172690
+}
+```
+
+**Computed features per event:**
+
+| Feature | Window | Logic |
+|---|---|---|
+| `window_1h_event_count` | 1 hour | Count events with `ts > now - 3600` |
+| `window_1h_unique_hosts` | 1 hour | Distinct hosts in last 1 hour |
+| `window_24h_unique_hosts` | 24 hours | Distinct hosts in last 24 hours |
+| `has_new_device` | All time | `computer_id not in known_hosts` |
+
+---
+
+### Stage 4 — Risk Scoring: Risk Engine
+
+`src/stream/risk_rules.py` is shared across Lambda, Flink, and Spark paths.
+
+Four deterministic rules with weighted scores:
+
+```
+risk_score = (lateral_movement × 35) + (burst_login × 25)
+           + (rare_host × 10)         + (new_device_spike × 30)
+```
+
+| Rule | Trigger Condition | Weight |
+|---|---|---|
+| `lateral_movement` | `window_1h_unique_hosts >= 10` | 35 |
+| `burst_login` | `window_1h_event_count >= 50` | 25 |
+| `rare_host` | `has_new_device == True` | 10 |
+| `new_device_spike` | `has_new_device AND window_24h_unique_hosts >= 25` | 30 |
+
+**Risk levels:**
+
+| Score | Level |
+|---|---|
+| 0 | LOW |
+| 1–25 | LOW |
+| 26–50 | MEDIUM |
+| 51–75 | HIGH |
+| 76+ | CRITICAL |
+
+---
+
+### Stage 5 — Storage: S3 Lakehouse
+
+`src/lambda_consumer/sink.py` writes JSONL.GZ to two S3 prefixes per batch:
+
+```
+s3://authpulse-dev-lakehouse-<account>/
+├── raw/auth_events/
+│   └── event_date=YYYY-MM-DD/
+│       └── HHMMSS-<uuid8>.jsonl.gz     ← raw 5-field events
+└── curated/auth_events_curated/
+    └── event_date=YYYY-MM-DD/
+        └── HHMMSS-<uuid8>.jsonl.gz     ← risk-enriched 12-field events
+```
+
+Both paths have Athena external tables with **partition projection** — no `MSCK REPAIR TABLE` needed, new partitions are auto-discovered.
+
+---
+
+## Risk Engine
+
+Full implementation in `src/stream/risk_rules.py`. The engine is pure Python with no external dependencies — used identically in Lambda, Spark, and Flink contexts.
+
+```python
+from src.stream.risk_rules import compute_risk
+
+score, flags = compute_risk(
+    user_id="U1",
+    dst_host="C999",
+    window_1h_event_count=60,      # → triggers burst_login
+    window_1h_unique_hosts=12,     # → triggers lateral_movement
+    window_24h_unique_hosts=30,
+    has_new_device=True,           # → triggers rare_host + new_device_spike
+)
+# score = 100, flags = ["lateral_movement", "burst_login", "rare_host", "new_device_spike"]
+```
+
+Rule thresholds and weights are configurable via `DEFAULT_RULE_CONFIG` dict — override for tuning without code changes.
+
+---
+
+## Data Model
+
+### `authpulse.auth_events_raw_json` — Raw Events
+
+| Column | Type | Description |
+|---|---|---|
+| `event_time_epoch` | BIGINT | Unix timestamp |
+| `event_time` | STRING | ISO 8601 timestamp |
+| `user_id` | STRING | User identifier |
+| `computer_id` | STRING | Target computer |
+| `event_id` | STRING | SHA256 dedup key |
+| `event_date` | STRING | Partition column (YYYY-MM-DD) |
+
+### `authpulse.auth_events_curated_json` — Risk-Enriched Events
+
+| Column | Type | Description |
+|---|---|---|
+| `event_time_epoch` | BIGINT | Unix timestamp |
+| `event_time` | STRING | ISO 8601 timestamp |
+| `user_id` | STRING | User identifier |
+| `dst_host` | STRING | Target computer |
+| `success` | BOOLEAN | Auth result |
+| `window_1h_event_count` | BIGINT | Logins in last 1 hour |
+| `window_1h_unique_hosts` | BIGINT | Distinct hosts in last 1 hour |
+| `window_24h_unique_hosts` | BIGINT | Distinct hosts in last 24 hours |
+| `has_new_device` | BOOLEAN | First-time device for this user |
+| `risk_score` | INT | Weighted risk score (0–100) |
+| `risk_flags` | ARRAY\<STRING\> | Triggered rule IDs |
+| `event_date` | STRING | Partition column (YYYY-MM-DD) |
+
+### Iceberg Tables (Parquet — batch path)
+
+- `authpulse.auth_events` — full enriched event history
+- `authpulse.auth_events_curated` — curated with ACID guarantees
+- `authpulse.user_behavior_hourly` — hourly aggregations per user
+- `authpulse.host_popularity_daily` — daily host access statistics
+
+DDL in `src/batch/ddl/`.
+
+---
+
+## Infrastructure (Terraform)
+
+All AWS resources are declared in `infra/terraform/`. The dev environment root module is `infra/terraform/envs/dev/main.tf`.
+
+### Modules
+
+| Module | Resources Created |
+|---|---|
+| `kinesis` | Kinesis stream, shard config |
+| `s3` | Lakehouse bucket, versioning, lifecycle |
+| `iam` | Shared execution role + least-privilege policies |
+| `glue_iceberg` | Glue database `authpulse`, crawler |
+| `lambda_consumer` | Lambda function, DynamoDB table, Kinesis ESM, IAM role, CloudWatch log group |
+| `monitoring` | CloudWatch dashboard, alarms (lag, errors, risk), SNS topic + email subscription |
+
+### Lambda module resources
+
+```hcl
+# DynamoDB: PAY_PER_REQUEST, TTL enabled
+aws_dynamodb_table.user_state
+
+# Lambda: Python 3.11, 512MB, 60s timeout
+aws_lambda_function.auth_processor
+
+# Kinesis ESM: batch=100, window=30s, bisect_on_error=true, retry=3
+aws_lambda_event_source_mapping.kinesis
+
+# IAM: Kinesis GetRecords, DDB GetItem/PutItem, S3 PutObject, CloudWatch logs
+aws_iam_role_policy.lambda
+```
+
+### Deploying
+
+```powershell
+# Copy example vars and fill in your values
+cd infra/terraform/envs/dev
+Copy-Item terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars: set alert_email, AWS account ID
+
+# Using the repo wrapper script (auto init/fmt/validate)
+.\..\..\..\scripts\terraform.ps1 -Env dev -Action plan
+.\..\..\..\scripts\terraform.ps1 -Env dev -Action apply
+
+# Or raw Terraform
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+**Resources created by `terraform apply`:**
+- Kinesis stream: `authpulse-dev-stream`
+- S3 bucket: `authpulse-dev-lakehouse-<account-id>`
+- Lambda: `authpulse-dev-auth-processor`
+- DynamoDB: `authpulse-dev-user-state`
+- Glue DB: `authpulse`
+- CloudWatch dashboard + alarms + SNS topic
+
+> `terraform apply` creates real AWS resources. Costs apply. Destroy with `terraform destroy` when done.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+1. **AWS account** with permissions: Kinesis, Lambda, DynamoDB, S3, Glue, Athena, IAM, CloudWatch, SNS
+2. **AWS CLI** configured: `aws configure && aws sts get-caller-identity`
+3. **Python 3.11+** installed
+4. **Terraform >= 1.5** installed
+5. **LANL dataset** — download from [csr.lanl.gov/data/auth](https://csr.lanl.gov/data/auth/) and place in `data/raw/auth.txt` (gitignored). A small sample CSV is included at `data/sample/auth_sample.csv` for testing.
+
+### Install Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Create venv + install all deps
+./scripts/setup_env.ps1
+
+# Run lint + unit tests
+./scripts/run_tests.ps1
+```
+
+---
+
+## Running the Pipeline
+
+### Step 1 — Provision AWS infrastructure
+
+```powershell
+cd infra/terraform/envs/dev
+Copy-Item terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars
+.\..\..\..\scripts\terraform.ps1 -Env dev -Action apply
+```
+
+### Step 2 — Create Athena tables
+
+Run each statement separately in the **Athena Query Editor** (engine v3):
+
+```bash
+# JSON-backed external tables (immediate queryability over Lambda output)
+# File: src/batch/ddl/json_tables.sql
+
+# Iceberg tables (for Parquet/batch writes)
+# File: src/batch/ddl/iceberg_auth_events.sql
+```
+
+### Step 3 — Deploy Lambda consumer
+
+Lambda is deployed automatically by `terraform apply` using `src/lambda_consumer/lambda_consumer.zip`.
+
+To rebuild after code changes:
+
+```powershell
+cd src/lambda_consumer
+pip install -r requirements.txt -t stage/
+Copy-Item handler.py, features.py, sink.py stage/
+Copy-Item ../stream/risk_rules.py stage/
+cd stage
+Compress-Archive -Path * -DestinationPath ../lambda_consumer.zip -Force
+cd ..
+# Re-run terraform apply to redeploy
+.\..\..\..\scripts\terraform.ps1 -Env dev -Action apply
+```
+
+### Step 4 — Start the event replay producer
+
+```bash
+# Use the sample CSV (included in repo)
+python src/producer/replay_lanl.py \
+  --input data/sample/auth_sample.csv \
+  --stream-name authpulse-dev-stream \
+  --region us-east-1 \
+  --rate 200
+
+# Full LANL dataset with checkpoint
+python src/producer/replay_lanl.py \
+  --input data/raw/auth.txt \
+  --stream-name authpulse-dev-stream \
+  --region us-east-1 \
+  --rate 2000 \
+  --checkpoint .checkpoints/replay_dev.json \
+  --resume
+
+# Dry run (parse and validate without sending)
+python src/producer/replay_lanl.py \
+  --input data/raw/auth.txt \
+  --dry-run
+```
+
+**Producer options:**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--rate` | 2000 | Events per second |
+| `--batch-size` | 200 | Records per PutRecords call (max 500) |
+| `--max-events` | None | Stop after N events |
+| `--resume` | False | Resume from last checkpoint |
+| `--dry-run` | False | Parse only, do not send |
+
+### Step 5 — Verify Lambda is processing
+
+```bash
+# Check Lambda logs
+aws logs tail /aws/lambda/authpulse-dev-auth-processor --follow --region us-east-1
+
+# Check S3 output
+aws s3 ls s3://authpulse-dev-lakehouse-<account-id>/curated/auth_events_curated/ --recursive
+```
+
+Expected Lambda log: `batch processed=8 failed=0`
+
+---
+
+## Querying Data in Athena
+
+Open the **Athena Query Editor** in the AWS console. Select database `authpulse`.
+
+### Validate data landed
 
 ```sql
--- High-risk users in last hour
-SELECT 
-    user_id,
-    COUNT(*) as event_count,
-    SUM(risk_score) as total_risk,
-    ARRAY_AGG(DISTINCT risk_flags) as flags
-FROM authpulse.auth_events_curated
-WHERE event_time >= NOW() - INTERVAL '1' HOUR
-  AND risk_level IN ('HIGH', 'CRITICAL')
-GROUP BY user_id
-ORDER BY total_risk DESC
+SELECT COUNT(*) AS total
+FROM authpulse.auth_events_curated_json;
+```
+
+### High-risk events
+
+```sql
+SELECT user_id, dst_host, risk_score, risk_flags, event_time
+FROM authpulse.auth_events_curated_json
+WHERE risk_score > 0
+ORDER BY risk_score DESC, event_time DESC
 LIMIT 20;
 ```
 
-See [src/batch/ddl/athena_queries.sql](src/batch/ddl/athena_queries.sql) for more examples.
+### Users with lateral movement
 
-### Step 7: Build QuickSight Dashboard
-
-1. Connect QuickSight to Athena
-2. Create dataset from `authpulse.auth_events_curated`
-3. Build visualizations:
-   - Risk level distribution (pie chart)
-   - Events per minute (line chart)
-   - Top risky users (bar chart)
-   - Geographic heatmap (if computer_id contains location)
-
-See [dashboards/quicksight_setup.md](dashboards/quicksight_setup.md) for detailed steps.
-
----
-
-## 📊 Monitoring & SLAs
-
-### Service Level Agreements
-
-| SLA | Target | Measurement | Alert Threshold |
-|-----|--------|-------------|------------------|
-| **Freshness** | < 5 minutes | `processing_time - event_time` P95 | > 300 seconds |
-| **Completeness** | < 0.1% invalid | Error count / total count | > 0.1% per hour |
-| **Availability** | 99.9% uptime | Spark job running | Job stopped |
-
-### CloudWatch Metrics
-
-**Kinesis Metrics**:
-- `GetRecords.IteratorAgeMilliseconds` → Alert if > 60000 (1 min lag)
-- `IncomingRecords` → Monitor producer throughput
-- `ReadProvisionedThroughputExceeded` → Alert on throttling
-
-**EMR Spark Metrics**:
-- `StreamingBatchDuration` → Alert if > 30000ms (exceeds trigger interval)
-- `StreamingSchedulingDelay` → Alert if growing (backlog)
-- `ExecutorMemoryUsed` → Alert if > 80%
-
-**Custom App Metrics** (published from Spark):
-```python
-import boto3
-cw = boto3.client('cloudwatch')
-
-cw.put_metric_data(
-    Namespace='AuthPulse',
-    MetricData=[{
-        'MetricName': 'ProcessingLagSeconds',
-        'Value': lag_seconds,
-        'Unit': 'Seconds'
-    }]
-)
+```sql
+SELECT user_id,
+       COUNT(*) AS event_count,
+       MAX(window_1h_unique_hosts) AS max_hosts_1h,
+       MAX(risk_score) AS max_risk
+FROM authpulse.auth_events_curated_json
+WHERE contains(risk_flags, 'lateral_movement')
+GROUP BY user_id
+ORDER BY max_risk DESC;
 ```
 
-### SNS Alert Topics
+### Risk score distribution
 
-```bash
-# Create SNS topic
-aws sns create-topic --name authpulse-critical-alerts
-
-# Subscribe email
-aws sns subscribe \
-  --topic-arn arn:aws:sns:us-east-1:ACCOUNT:authpulse-critical-alerts \
-  --protocol email \
-  --notification-endpoint your-email@example.com
+```sql
+SELECT
+  CASE
+    WHEN risk_score = 0        THEN 'NONE'
+    WHEN risk_score <= 25      THEN 'LOW'
+    WHEN risk_score <= 50      THEN 'MEDIUM'
+    WHEN risk_score <= 75      THEN 'HIGH'
+    ELSE                            'CRITICAL'
+  END AS risk_level,
+  COUNT(*) AS event_count
+FROM authpulse.auth_events_curated_json
+GROUP BY 1
+ORDER BY event_count DESC;
 ```
 
-**Alert Conditions**:
-- Freshness SLA breach (P95 lag > 5 min)
-- Invalid record rate > 0.1%
-- Spark job failure
-- Kinesis throttling
+### Query by date partition
 
-See [observability/cloudwatch_metrics.md](observability/cloudwatch_metrics.md) for complete metric catalog.
-
----
-
-## 📝 Design Decisions
-
-Key architectural choices documented in [docs/design_decisions.md](docs/design_decisions.md):
-
-1. **Kinesis vs. Kafka**: Chose Kinesis for managed service simplicity
-2. **PySpark vs. Flink**: PySpark for unified batch/streaming API
-3. **Iceberg vs. Delta**: Iceberg for vendor-neutral lakehouse
-4. **EMR vs. Glue**: EMR for full Spark control and latest versions
-5. **Athena vs. Redshift**: Athena for serverless ad-hoc queries
-6. **Daily partitioning**: Balance between query performance and partition count
-7. **Stateful processing**: Hybrid approach (in-memory + Iceberg bootstrap)
-8. **Dead letter queue**: Handle invalid records without stopping pipeline
+```sql
+SELECT *
+FROM authpulse.auth_events_curated_json
+WHERE event_date = '1970-01-15'   -- LANL epoch timestamps start near 1970
+LIMIT 100;
+```
 
 ---
 
-## 💼 Resume Impact
+## Monitoring & SLAs
 
-**What This Project Demonstrates**:
+### SLA Targets
 
-✅ **Real-Time Streaming**: Kinesis + PySpark Structured Streaming micro-batching  
-✅ **Stateful Processing**: Rolling windows, user state tracking, deduplication  
-✅ **Lakehouse Architecture**: Apache Iceberg with ACID, schema evolution, time travel  
-✅ **Data Modeling**: Star schema (fact + dimensions), partitioning strategy  
-✅ **AWS Expertise**: Kinesis, EMR, S3, Glue, Athena, QuickSight, CloudWatch, SNS  
-✅ **Production Best Practices**: SLA monitoring, alerting, checkpointing, error handling  
-✅ **Security Analytics**: Domain knowledge in authentication logs, risk scoring  
-✅ **SQL Proficiency**: Complex Athena queries, aggregations, window functions  
-✅ **Python**: OOP, dataclasses, type hints, boto3, PySpark DataFrame API  
-✅ **Documentation**: Architecture diagrams, decision records, runbooks  
+| SLA | Target | Alarm Threshold |
+|---|---|---|
+| **End-to-end latency** | < 5 minutes | P95 processing lag > 300s |
+| **Data completeness** | < 0.1% invalid records | Error rate > 0.1% per hour |
+| **Pipeline availability** | 99.9% uptime | Lambda errors > 0 consecutive |
 
-**Talking Points for Interviews**:
+### Key CloudWatch Metrics
 
-- "Built end-to-end streaming pipeline processing 10k events/sec with sub-5-minute latency"
-- "Implemented stateful stream processing with PySpark mapGroupsWithState for user behavior tracking"
-- "Designed Apache Iceberg lakehouse with daily partitioning, reducing query costs by 90%"
-- "Enforced SLAs via CloudWatch metrics and SNS alerts, achieving 99.9% pipeline uptime"
-- "Developed rule-based risk engine detecting lateral movement and credential anomalies"
+**Kinesis:**
+- `GetRecords.IteratorAgeMilliseconds` — consumer lag; alert > 60,000ms
+- `IncomingRecords` — producer throughput monitor
+- `ReadProvisionedThroughputExceeded` — shard throttling; alert > 0
 
-**Keywords for ATS**:
-PySpark, Apache Iceberg, AWS EMR, Kinesis Data Streams, AWS Glue, Amazon Athena, Structured Streaming, Real-Time Analytics, Lakehouse, Data Engineering, Python, CloudWatch, SNS, QuickSight, Security Analytics
+**Lambda:**
+- `Duration` — invocation time; alert if P95 > 30,000ms
+- `Errors` — failed invocations; alert > 0
+- `Throttles` — Lambda concurrency limit hit
+
+**DynamoDB:**
+- `SuccessfulRequestLatency` — state read/write speed
+- `ConsumedWriteCapacityUnits` — write load
+
+**Custom (Application):**
+- `InvalidRecordCount` — schema validation failures
+- `ProcessingLagSeconds` — `processing_time - event_time` P95
+- `RiskScoreDistribution` — count by risk level (security dashboard)
+
+### SNS Alerts
+
+All alarms route to SNS topic `authpulse-dev-alerts`. Configure your email in `terraform.tfvars`:
+
+```hcl
+alert_email = "your-email@example.com"
+```
 
 ---
 
-## 🔮 Future Enhancements
+## Design Decisions
+
+Full ADRs in [docs/design_decisions.md](docs/design_decisions.md). Key choices:
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Streaming engine | AWS Lambda | No JAR packaging complexity; pure Python; Kinesis ESM handles batching and retry |
+| State store | DynamoDB | Sub-millisecond read/write; TTL for automatic cleanup; no cluster to manage |
+| Stream buffer | Kinesis vs. Kafka | Fully managed; native IAM/CloudWatch; right-sized for this throughput |
+| Lakehouse format | Apache Iceberg | Vendor-neutral; best Athena + Glue integration; ACID with partition evolution |
+| Query engine | Athena v3 | Serverless; pay-per-query; native Iceberg; partition projection eliminates repair overhead |
+| Batch compute | PySpark on EMR | Unified batch + streaming API; reuses same risk logic; full Iceberg write support |
+| IaC | Terraform | Reproducible; modular; provider-agnostic vs. CloudFormation |
+
+---
+
+## Portfolio & Resume Talking Points
+
+**What this project demonstrates:**
+
+- **Event-Driven Architecture** — Kinesis + Lambda ESM with stateful per-user feature computation
+- **Stateful Stream Processing** — DynamoDB sliding window state (1h/24h) without a dedicated streaming cluster
+- **Lakehouse Design** — Apache Iceberg ACID tables with daily partitioning + Athena partition projection
+- **Risk Engine** — Deterministic weighted rule scoring shared across Lambda, Spark, and Flink codepaths
+- **Infrastructure as Code** — Full Terraform stack: 6 modules, zero manual AWS console steps
+- **Production Practices** — Checkpointed replay, bisect-on-error retry, TTL-based state expiry, CloudWatch alarms
+- **Security Domain** — Authentication log analysis, lateral movement detection, credential anomaly scoring
+- **End-to-End Validation** — Live pipeline: producer → Kinesis → Lambda → DynamoDB → S3 → Athena (42s E2E)
+
+**Interview talking points:**
+
+- *"Built a serverless real-time pipeline on AWS Lambda + Kinesis that processes authentication events with 42-second end-to-end latency and sub-5-minute SLA"*
+- *"Implemented per-user stateful feature computation using DynamoDB as a sliding window store with automatic TTL expiry — no Flink cluster required"*
+- *"Designed Apache Iceberg lakehouse with daily partitioning and Athena partition projection, eliminating MSCK REPAIR overhead and reducing query scan cost"*
+- *"Wrote a deterministic risk engine shared across three compute runtimes — the same Python module runs in Lambda, PySpark, and PyFlink with zero modification"*
+- *"Provisioned the full AWS stack with Terraform in 6 reusable modules — Kinesis, S3, IAM, Glue, Lambda+DynamoDB, and CloudWatch monitoring"*
+
+**ATS Keywords:**
+
+AWS Lambda, Amazon Kinesis, Amazon DynamoDB, Apache Iceberg, AWS Glue, Amazon Athena, PySpark, Amazon EMR, Real-Time Streaming, Event-Driven Architecture, Lakehouse, Data Engineering, Python, Terraform, CloudWatch, SNS, Security Analytics, Stateful Processing, Infrastructure as Code
+
+---
+
+## Future Enhancements
 
 ### Machine Learning Integration
-- **Replace rule engine** with ML model (SageMaker)
-- **Anomaly detection**: Isolation Forest or autoencoders
-- **Feature engineering**: Extract behavioral patterns for training
-- **Online inference**: Real-time scoring via SageMaker endpoint
+- Replace rule engine with SageMaker real-time inference endpoint
+- Feature store (SageMaker Feature Store) for consistent training/serving features
+- Anomaly detection with Isolation Forest or LSTM autoencoder
 
 ### Advanced Analytics
-- **Graph analysis**: User-computer network using Neptune
-- **Temporal patterns**: Hour-of-day / day-of-week baselines
-- **Entity resolution**: Merge duplicate user/computer identities
+- Graph analysis — user-computer network via Amazon Neptune
+- Temporal baseline — hour-of-day / day-of-week behavioral profiles
+- Entity resolution — merge duplicate user/computer identities
 
 ### Operational Improvements
-- **Auto-scaling**: EMR fleet based on Kinesis lag
-- **Cost optimization**: Reserved instances, S3 lifecycle policies
-- **Multi-region**: Disaster recovery with cross-region replication
-- **CI/CD**: Automated testing and deployment pipelines
+- Lambda Provisioned Concurrency — eliminate cold starts for SLA-critical path
+- Kinesis Enhanced Fan-Out — dedicated 2MB/s throughput per consumer
+- Multi-shard scaling — auto-scale shards based on `IteratorAgeMilliseconds`
+- CI/CD — GitHub Actions pipeline for Lambda ZIP build + `terraform apply`
 
-### Enhanced Monitoring
-- **Grafana dashboards**: Time-series visualization
-- **OpenTelemetry**: Distributed tracing for latency analysis
-- **Data quality**: Great Expectations framework integration
-
----
-
-## 📚 Additional Resources
-
-- **[Architecture Overview](docs/architecture.md)** - Detailed system design and component specifications
-- **[Data Flow](docs/data_flow.md)** - End-to-end pipeline stages and transformations
-- **[Design Decisions](docs/design_decisions.md)** - ADRs explaining technology choices
-- **[Athena Query Examples](src/batch/ddl/athena_queries.sql)** - Production SQL queries
-- **[KPI Definitions](dashboards/kpi_definitions.md)** - Key performance indicators and metrics
-- **[CloudWatch Metrics](observability/cloudwatch_metrics.md)** - Complete observability catalog
+### Observability
+- OpenTelemetry distributed tracing — end-to-end latency attribution
+- Grafana dashboards — time-series visualization for operational metrics
+- Great Expectations integration — automated schema + freshness DQ gates
 
 ---
 
-## 🤝 Contributing
+## Additional Resources
 
-This is a portfolio/educational project. Issues and pull requests are welcome for:
-- Bug fixes
-- Documentation improvements
-- Additional SQL query examples
-- Enhanced risk detection rules
-
----
-
-## 📄 License
-
-MIT License - See LICENSE file for details
+- [Architecture Diagram](docs/architecture-diagram.png)
+- [Design Decisions (ADRs)](docs/design_decisions.md)
+- [Operations Runbook](docs/runbook_operations.md)
+- [Data Contracts](docs/data_contracts.md)
+- [SLA Definition](docs/sla_definition.md)
+- [CloudWatch Metrics Catalog](observability/cloudwatch_metrics.md)
+- [KPI Definitions](dashboards/kpi_definitions.md)
+- [Athena DDL](src/batch/ddl/)
 
 ---
 
-## 🙏 Acknowledgments
+## Dataset
 
-- **LANL** for providing the authentication dataset
-- **Apache Iceberg** community for excellent lakehouse format
-- **AWS** for managed services enabling rapid development
+**LANL User-Computer Authentication Associations in Time**
+
+- Source: [csr.lanl.gov/data/auth](https://csr.lanl.gov/data/auth/)
+- 708M+ authentication events
+- 9 months of enterprise activity
+- 11k+ users, 22k+ computers
+- Record format: `time,user,computer` (unix epoch, no header)
+
+Place the dataset at `data/raw/auth.txt` (gitignored). A small sample is included at `data/sample/auth_sample.csv`.
+
+---
+
+## License
+
+MIT License — see LICENSE for details.
+
+---
+
+## Acknowledgments
+
+- **LANL** for the authentication dataset
+- **Apache Iceberg** community for the lakehouse format
+- **AWS** for the managed services that made this architecture possible

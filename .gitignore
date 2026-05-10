@@ -35,3 +35,6 @@ tfplan
 tfplan.*
 *.tfvars
 !*.tfvars.example
+
+# Lambda build artifacts
+src/lambda_consumer/stage/

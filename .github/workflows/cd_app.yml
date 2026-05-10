@@ -2,12 +2,37 @@ name: cd-app
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/lambda_consumer/**"
 
 jobs:
-  build:
+  deploy-lambda:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Lambda ZIP
         run: |
-          echo "Placeholder: build/package and deploy Flink job"
+          pip install -r src/lambda_consumer/requirements.txt -t src/lambda_consumer/stage/
+          cp src/lambda_consumer/handler.py src/lambda_consumer/stage/
+          cp src/lambda_consumer/features.py src/lambda_consumer/stage/
+          cp src/lambda_consumer/sink.py src/lambda_consumer/stage/
+          cp src/stream/risk_rules.py src/lambda_consumer/stage/
+          cd src/lambda_consumer/stage && zip -r ../lambda_consumer.zip . && cd -
+
+      - name: Terraform apply (Lambda redeploy)
+        working-directory: infra/terraform/envs/dev
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+        run: |
+          terraform init
+          terraform apply -auto-approve -target=module.lambda_consumer
