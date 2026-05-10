@@ -224,8 +224,14 @@ authpulse-aws-streaming-security-analytics/
 │   ├── stream/
 │   │   ├── flink/
 │   │   │   └── main_job.py             # PyFlink SQL Table API job (KDA)
+│   │   ├── spark/
+│   │   │   └── main_job.py             # PySpark Structured Streaming job
 │   │   ├── risk_rules.py               # Rule-based risk scoring logic
-│   │   └── state_manager.py            # Flink keyed state management
+│   │   ├── state_manager.py            # Flink keyed state management
+│   │   ├── schemas.py                  # PySpark StructType schemas
+│   │   ├── config.py                   # Config dataclasses
+│   │   ├── risk_engine.py              # PySpark UDF risk engine wrapper
+│   │   └── window_metrics.py           # Rolling window aggregations
 │   ├── batch/                          # Daily batch aggregations
 │   ├── common/
 │   │   ├── models.py                   # Pydantic event models
@@ -233,13 +239,6 @@ authpulse-aws-streaming-security-analytics/
 │   │   └── logging_utils.py            # Structured JSON logging
 │   └── quality/
 │       └── run_quality_checks.py       # Great Expectations DQ checks
-│
-│   ├── spark/
-│   │   └── main_job.py                 # PySpark Structured Streaming job
-│   ├── schemas.py                      # PySpark StructType schemas
-│   ├── config.py                       # Config dataclasses
-│   ├── risk_engine.py                  # PySpark UDF risk engine wrapper
-│   └── window_metrics.py               # Rolling window aggregations
 │
 ├── infra/terraform/
 │   ├── envs/dev/                       # Dev environment root module
@@ -260,7 +259,6 @@ authpulse-aws-streaming-security-analytics/
 │
 ├── observability/
 │   ├── cloudwatch_dashboards.json      # CloudWatch dashboard JSON
-│   └── alarms/                         # Terraform alarm configs
 │
 ├── docs/
 │   ├── architecture.md                 # System design
@@ -269,7 +267,6 @@ authpulse-aws-streaming-security-analytics/
 │   ├── data_contracts.md               # Event schema & field contracts
 │   ├── runbook_operations.md           # Ops runbook: deploy, alerts, rollback
 │   ├── sla_definition.md               # SLA targets and measurement
-│   └── faq_interview.md               # Interview talking points
 │
 ├── scripts/                            # PowerShell dev helpers
 │   ├── setup_env.ps1

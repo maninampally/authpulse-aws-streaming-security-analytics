@@ -44,6 +44,14 @@ def iter_lanl_rows(
     - `.bz2` compressed input
     """
     p = Path(input_path)
+    if not p.exists():
+        raise FileNotFoundError(
+            f"LANL input path does not exist: {p}. Point --input at a .txt, .csv, or .bz2 file."
+        )
+    if p.is_dir():
+        raise IsADirectoryError(
+            f"LANL input path is a directory: {p}. Point --input at the actual dataset file inside that folder."
+        )
     yielded = 0
 
     if p.suffix.lower() == ".csv":

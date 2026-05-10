@@ -10,7 +10,7 @@ Covers deployment, common alerts, diagnosis steps, and rollback procedures.
 ### Prerequisites
 - AWS CLI configured (`aws configure` or SSO) with the target account.
 - Terraform >= 1.5, Python 3.10+, venv activated.
-- S3 bucket `authpulse-dev-lakehouse-289591071327` exists (created by Terraform on first run).
+- S3 bucket `authpulse-dev-lakehouse-604743481383` exists (created by Terraform on first run).
 
 ### Step 1 — Deploy infrastructure
 ```powershell

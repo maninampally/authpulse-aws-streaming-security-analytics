@@ -380,6 +380,31 @@ Need operational visibility and SLA enforcement.
 
 ---
 
+## Decision 9: PyFlink Deployment Packaging on KDA
+
+### Context
+KDA Managed Service for Apache Flink requires specific artifact packaging for PyFlink jobs.
+
+### Problem Encountered
+Bundling connector JARs inside the Python ZIP causes KDA to treat the JAR as the main application artifact and fail with `Neither a 'Main-Class', nor a 'program-class' entry was found`.
+
+### Decision: Spark path for demo; Flink requires Maven build pipeline
+
+### Rationale
+PyFlink on KDA requires either:
+- A fat JAR built via Maven with the PyFlink runner as `Main-Class`, referencing Python script via `--pyFiles`
+- OR connector JARs supplied separately via `FlinkRunConfiguration.--jarfile`, not bundled in the Python ZIP
+
+For a build pipeline, the correct approach is to generate the fat JAR in CI (GitHub Actions Maven step) and upload to S3 before `terraform apply`.
+
+### Current Status
+- Kinesis stream, S3, Glue Iceberg tables, IAM, monitoring — all live in `us-east-1`
+- Producer → Kinesis: validated (8 events, 0 failures)
+- Flink app: deployed but not running (packaging fix pending)
+- Demo path: use `src/stream/spark/main_job.py` on EMR for risk scoring
+
+---
+
 ## References
 - [Architecture Overview](architecture.md)
 - [Data Flow Details](data_flow.md)

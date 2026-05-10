@@ -57,13 +57,13 @@ module "kda_flink" {
 module "monitoring" {
   source = "../../modules/monitoring"
 
-  name_prefix        = "authpulse-dev"
-  aws_region         = var.aws_region
+  name_prefix         = "authpulse-dev"
+  aws_region          = var.aws_region
   kinesis_stream_name = var.kinesis_stream_name
 
-  flink_application_name             = var.flink_application_name
-  flink_metrics_namespace            = var.flink_metrics_namespace
-  flink_application_dimension_name   = var.flink_application_dimension_name
+  flink_application_name           = var.flink_application_name
+  flink_metrics_namespace          = var.flink_metrics_namespace
+  flink_application_dimension_name = var.flink_application_dimension_name
 
   dashboard_json_path = "${path.module}/../../monitoring/cloudwatch_dashboard.json"
 
