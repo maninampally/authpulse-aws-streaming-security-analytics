@@ -251,6 +251,43 @@ def replay_to_kinesis(
     }
 
 
+def replay_lanl(config_path: str | Path) -> dict[str, Any]:
+    """Compatibility wrapper used by older tests and callers."""
+    cfg = load_yaml(config_path)
+    cfg_kinesis = (
+        cfg.get("kinesis", {}) if isinstance(cfg.get("kinesis"), dict) else {}
+    )
+    cfg_producer = (
+        cfg.get("producer", {}) if isinstance(cfg.get("producer"), dict) else {}
+    )
+    cfg_replay = cfg.get("replay", {}) if isinstance(cfg.get("replay"), dict) else {}
+    cfg_aws = cfg.get("aws", {}) if isinstance(cfg.get("aws"), dict) else {}
+
+    stream_name = str(cfg_kinesis.get("stream_name") or "")
+    if not stream_name:
+        raise SystemExit(
+            "Missing stream name. Provide kinesis.stream_name in config."
+        )
+
+    input_path = str(cfg_replay.get("input_path") or "")
+    if not input_path:
+        raise SystemExit("Missing replay.input_path in config.")
+
+    return replay_to_kinesis(
+        input_path=input_path,
+        stream_name=stream_name,
+        region=str(cfg_kinesis.get("region") or "us-east-1"),
+        aws_profile=str(cfg_aws.get("profile")) if cfg_aws.get("profile") else None,
+        rate_events_per_sec=int(cfg_producer.get("rate_events_per_sec") or 2000),
+        batch_size=int(cfg_replay.get("batch_size") or 200),
+        max_events=cfg_replay.get("max_events"),
+        checkpoint_path=cfg_replay.get("checkpoint_path"),
+        resume=bool(cfg_replay.get("resume") or False),
+        checkpoint_every=int(cfg_replay.get("checkpoint_every") or 5_000),
+        dry_run=bool(cfg_replay.get("dry_run") or False),
+    )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Replay LANL auth events into Kinesis")
     ap.add_argument(

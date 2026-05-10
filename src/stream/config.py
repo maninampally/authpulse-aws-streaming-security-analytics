@@ -29,7 +29,7 @@ class KinesisConfig:
 class S3Config:
     bucket: str = field(
         default_factory=lambda: _env(
-            "AUTHPULSE_S3_BUCKET", "authpulse-dev-lakehouse-289591071327"
+            "AUTHPULSE_S3_BUCKET", "authpulse-dev-lakehouse"
         )
     )
     raw_prefix: str = "raw/auth_events"
@@ -60,7 +60,7 @@ class IcebergConfig:
     database: str = "authpulse"
     warehouse: str = field(
         default_factory=lambda: (
-            f"s3a://{_env('AUTHPULSE_S3_BUCKET', 'authpulse-dev-lakehouse-289591071327')}/iceberg/"
+            f"s3a://{_env('AUTHPULSE_S3_BUCKET', 'authpulse-dev-lakehouse')}/iceberg/"
         )
     )
 
@@ -94,7 +94,7 @@ class StreamingConfig:
     checkpoint_location: str = field(
         default_factory=lambda: _env(
             "AUTHPULSE_CHECKPOINT_LOCATION",
-            "s3a://authpulse-dev-lakehouse-289591071327/checkpoints/spark-streaming",
+            "s3a://authpulse-dev-lakehouse/checkpoints/spark-streaming",
         )
     )
     trigger_seconds: int = 30

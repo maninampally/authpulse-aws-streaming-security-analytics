@@ -162,7 +162,7 @@ def main() -> None:
         "--s3-raw-path",
         default=_env(
             "AUTHPULSE_S3_RAW_PATH",
-            "s3a://authpulse-dev-lakehouse-289591071327/raw/auth_events",
+            "s3a://authpulse-dev-lakehouse/raw/auth_events",
         ),
         help="S3 path for raw sink (e.g., s3a://bucket/prefix)",
     )
@@ -170,7 +170,7 @@ def main() -> None:
         "--s3-features-path",
         default=_env(
             "AUTHPULSE_S3_FEATURES_PATH",
-            "s3a://authpulse-dev-lakehouse-289591071327/features/auth_user_features/",
+            "s3a://authpulse-dev-lakehouse/features/auth_user_features/",
         ),
         help="S3 path for user behavior feature sink (e.g., s3a://bucket/prefix)",
     )
@@ -178,7 +178,7 @@ def main() -> None:
         "--s3-curated-events-path",
         default=_env(
             "AUTHPULSE_S3_CURATED_EVENTS_PATH",
-            "s3a://authpulse-dev-lakehouse-289591071327/curated/auth_events_curated/",
+            "s3a://authpulse-dev-lakehouse/curated/auth_events_curated/",
         ),
         help="S3 path for curated risk-enriched events sink (e.g., s3a://bucket/prefix)",
     )
