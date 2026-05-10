@@ -5,7 +5,6 @@ import time
 from typing import Any
 
 import boto3
-from boto3.dynamodb.conditions import Attr
 
 DDB_TABLE = os.environ.get("STATE_TABLE_NAME", "authpulse-dev-user-state")
 HOUR = 3600
