@@ -26,8 +26,7 @@ resource "aws_glue_catalog_table" "auth_events_raw" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "table_type"       = "ICEBERG"
-    "metadata_location" = "${local.base_location}/raw/auth_events/metadata/"
+    "table_type" = "ICEBERG"
   }
 
   storage_descriptor {
@@ -61,6 +60,10 @@ resource "aws_glue_catalog_table" "auth_events_raw" {
     name = "event_date"
     type = "string"
   }
+
+  lifecycle {
+    ignore_changes = [parameters]
+  }
 }
 
 # ── auth_events_curated ──────────────────────────────────────
@@ -71,8 +74,7 @@ resource "aws_glue_catalog_table" "auth_events_curated" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "table_type"        = "ICEBERG"
-    "metadata_location" = "${local.base_location}/curated/auth_events_curated/metadata/"
+    "table_type" = "ICEBERG"
   }
 
   storage_descriptor {
@@ -135,6 +137,10 @@ resource "aws_glue_catalog_table" "auth_events_curated" {
     name = "event_date"
     type = "string"
   }
+
+  lifecycle {
+    ignore_changes = [parameters]
+  }
 }
 
 # ── user_behavior_hourly ─────────────────────────────────────
@@ -145,8 +151,7 @@ resource "aws_glue_catalog_table" "user_behavior_hourly" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "table_type"        = "ICEBERG"
-    "metadata_location" = "${local.base_location}/features/auth_user_features/metadata/"
+    "table_type" = "ICEBERG"
   }
 
   storage_descriptor {
@@ -194,6 +199,10 @@ resource "aws_glue_catalog_table" "user_behavior_hourly" {
     type    = "string"
     comment = "1h or 24h"
   }
+
+  lifecycle {
+    ignore_changes = [parameters]
+  }
 }
 
 # ── host_popularity_daily ────────────────────────────────────
@@ -204,8 +213,7 @@ resource "aws_glue_catalog_table" "host_popularity_daily" {
   table_type = "EXTERNAL_TABLE"
 
   parameters = {
-    "table_type"        = "ICEBERG"
-    "metadata_location" = "${local.base_location}/curated/host_popularity_daily/metadata/"
+    "table_type" = "ICEBERG"
   }
 
   storage_descriptor {
@@ -239,5 +247,9 @@ resource "aws_glue_catalog_table" "host_popularity_daily" {
     name    = "event_date"
     type    = "string"
     comment = "yyyy-MM-dd"
+  }
+
+  lifecycle {
+    ignore_changes = [parameters]
   }
 }

@@ -4,7 +4,7 @@
 # ── Core ────────────────────────────────────────────────────────────────────
 aws_region            = "us-east-1"
 kinesis_stream_name   = "authpulse-dev-stream"
-lakehouse_bucket_name = "authpulse-dev-lakehouse-289591071327"
+lakehouse_bucket_name = "authpulse-dev-lakehouse"
 
 # ── IAM ─────────────────────────────────────────────────────────────────────
 create_iam_role      = true
@@ -15,7 +15,7 @@ flink_application_name           = "authpulse-dev-flink-app"
 flink_metrics_namespace          = "AWS/KinesisAnalytics"
 flink_application_dimension_name = "Application"
 # Upload the packaged job to S3 before terraform apply:
-#   aws s3 cp path/to/authpulse-flink-job.zip s3://authpulse-dev-lakehouse-289591071327/flink-app/authpulse-flink-job.zip
+#   aws s3 cp path/to/authpulse-flink-job.zip s3://authpulse-dev-lakehouse/flink-app/authpulse-flink-job.zip
 flink_app_s3_key     = "flink-app/authpulse-flink-job.zip"
 flink_source_format  = "json"   # json (AuthEvent) or csv (raw LANL time,user,computer)
 

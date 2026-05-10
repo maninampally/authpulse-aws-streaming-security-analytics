@@ -38,18 +38,15 @@ module "glue_iceberg" {
   tags                  = var.tags
 }
 
-module "kda_flink" {
-  source = "../../modules/kda_flink"
+module "lambda_consumer" {
+  source = "../../modules/lambda_consumer"
 
-  application_name           = var.flink_application_name
-  service_execution_role_arn = module.iam.role_arn
-  app_s3_bucket_arn          = module.s3.bucket_arn
-  app_s3_key                 = var.flink_app_s3_key
-
-  kinesis_stream_name   = var.kinesis_stream_name
+  name_prefix           = "authpulse-dev"
   aws_region            = var.aws_region
+  kinesis_stream_arn    = module.kinesis.stream_arn
   lakehouse_bucket_name = var.lakehouse_bucket_name
-  source_format         = var.flink_source_format
+  lakehouse_bucket_arn  = module.s3.bucket_arn
+  lambda_zip_path       = "${path.module}/../../../../src/lambda_consumer/lambda_consumer.zip"
 
   tags = var.tags
 }

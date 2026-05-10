@@ -10,7 +10,7 @@ variable "kinesis_stream_name" {
 
 variable "lakehouse_bucket_name" {
   type    = string
-  default = "authpulse-dev-lakehouse-289591071327"
+  default = "authpulse-dev-lakehouse"
 }
 
 variable "tags" {
