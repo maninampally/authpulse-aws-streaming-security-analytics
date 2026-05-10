@@ -58,10 +58,6 @@ module "monitoring" {
   aws_region          = var.aws_region
   kinesis_stream_name = var.kinesis_stream_name
 
-  flink_application_name           = var.flink_application_name
-  flink_metrics_namespace          = var.flink_metrics_namespace
-  flink_application_dimension_name = var.flink_application_dimension_name
-
   dashboard_json_path = "${path.module}/../../monitoring/cloudwatch_dashboard.json"
 
   alert_email = var.alert_email

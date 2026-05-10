@@ -33,24 +33,6 @@ variable "iam_trusted_services" {
   default     = ["ec2.amazonaws.com"]
 }
 
-variable "flink_application_name" {
-  type        = string
-  description = "Managed Flink application name (for CloudWatch metrics)."
-  default     = "authpulse-dev-flink-app"
-}
-
-variable "flink_metrics_namespace" {
-  type        = string
-  description = "CloudWatch namespace for Managed Flink metrics."
-  default     = "AWS/KinesisAnalytics"
-}
-
-variable "flink_application_dimension_name" {
-  type        = string
-  description = "Dimension key name for the Flink application."
-  default     = "Application"
-}
-
 variable "alert_email" {
   type        = string
   description = "Email endpoint for SNS subscription (must confirm)."
@@ -93,14 +75,3 @@ variable "glue_database_name" {
   default     = "authpulse"
 }
 
-variable "flink_app_s3_key" {
-  type        = string
-  description = "S3 object key for the packaged Flink job (ZIP/JAR). Must be uploaded before terraform apply."
-  default     = "flink-app/authpulse-flink-job.zip"
-}
-
-variable "flink_source_format" {
-  type        = string
-  description = "Input record format the Flink job reads from Kinesis: json or csv."
-  default     = "json"
-}

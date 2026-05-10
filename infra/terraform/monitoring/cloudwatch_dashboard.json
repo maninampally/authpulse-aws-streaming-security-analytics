@@ -54,13 +54,20 @@
         "region": "__REGION__",
         "view": "timeSeries",
         "stacked": false,
-        "title": "Managed Flink: Failed Checkpoints",
+        "title": "Lambda: Invocations & Errors",
         "metrics": [
           [
-            "__FLINK_NAMESPACE__",
-            "numberOfFailedCheckpoints",
-            "Application",
-            "__FLINK_APP_NAME__",
+            "AWS/Lambda",
+            "Invocations",
+            "FunctionName",
+            "authpulse-dev-auth-processor",
+            { "stat": "Sum", "period": 60 }
+          ],
+          [
+            "AWS/Lambda",
+            "Errors",
+            "FunctionName",
+            "authpulse-dev-auth-processor",
             { "stat": "Sum", "period": 60 }
           ]
         ]
@@ -76,21 +83,14 @@
         "region": "__REGION__",
         "view": "timeSeries",
         "stacked": false,
-        "title": "Managed Flink: Records In/Out",
+        "title": "Lambda: Duration (P95)",
         "metrics": [
           [
-            "__FLINK_NAMESPACE__",
-            "numRecordsIn",
-            "Application",
-            "__FLINK_APP_NAME__",
-            { "stat": "Sum", "period": 60 }
-          ],
-          [
-            "__FLINK_NAMESPACE__",
-            "numRecordsOut",
-            "Application",
-            "__FLINK_APP_NAME__",
-            { "stat": "Sum", "period": 60 }
+            "AWS/Lambda",
+            "Duration",
+            "FunctionName",
+            "authpulse-dev-auth-processor",
+            { "stat": "p95", "period": 60 }
           ]
         ]
       }
@@ -98,6 +98,39 @@
     {
       "type": "metric",
       "x": 0,
+      "y": 12,
+      "width": 12,
+      "height": 6,
+      "properties": {
+        "region": "__REGION__",
+        "view": "timeSeries",
+        "stacked": false,
+        "title": "DynamoDB: State Read/Write Latency",
+        "metrics": [
+          [
+            "AWS/DynamoDB",
+            "SuccessfulRequestLatency",
+            "TableName",
+            "authpulse-dev-user-state",
+            "Operation",
+            "GetItem",
+            { "stat": "Average", "period": 60 }
+          ],
+          [
+            "AWS/DynamoDB",
+            "SuccessfulRequestLatency",
+            "TableName",
+            "authpulse-dev-user-state",
+            "Operation",
+            "PutItem",
+            { "stat": "Average", "period": 60 }
+          ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 12,
       "y": 12,
       "width": 12,
       "height": 6,
@@ -116,26 +149,6 @@
         "yAxis": {
           "left": { "min": 0, "max": 5 }
         }
-      }
-    },
-    {
-      "type": "metric",
-      "x": 12,
-      "y": 12,
-      "width": 12,
-      "height": 6,
-      "properties": {
-        "region": "__REGION__",
-        "view": "timeSeries",
-        "stacked": false,
-        "title": "Replay Producer: Events/sec (optional)",
-        "metrics": [
-          [
-            "Authpulse/Producer",
-            "EventsPerSecond",
-            { "stat": "Average", "period": 60 }
-          ]
-        ]
       }
     }
   ]

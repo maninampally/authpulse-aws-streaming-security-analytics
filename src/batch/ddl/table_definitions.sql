@@ -3,8 +3,8 @@
 
 -- ============================================================
 -- TABLE: auth_events_raw
--- Purpose: Unmodified events landed from Kinesis via Flink raw sink.
--- Source columns match the Flink S3 filesystem sink schema.
+-- Purpose: Unmodified events landed from Kinesis via Lambda consumer.
+-- Source columns match the Lambda S3 sink schema (JSONL.GZ → Iceberg).
 -- ============================================================
 CREATE TABLE IF NOT EXISTS authpulse.auth_events_raw (
   event_time  TIMESTAMP   COMMENT 'UTC event timestamp from record',

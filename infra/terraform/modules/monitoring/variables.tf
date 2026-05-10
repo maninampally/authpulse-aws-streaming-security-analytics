@@ -13,24 +13,6 @@ variable "kinesis_stream_name" {
   description = "Kinesis stream name used in dashboard widgets and alarms."
 }
 
-variable "flink_application_name" {
-  type        = string
-  description = "Managed Flink application name (used as a CloudWatch metric dimension)."
-  default     = ""
-}
-
-variable "flink_metrics_namespace" {
-  type        = string
-  description = "CloudWatch namespace for Managed Flink metrics (varies by deployment)."
-  default     = "AWS/KinesisAnalytics"
-}
-
-variable "flink_application_dimension_name" {
-  type        = string
-  description = "Dimension key name that identifies the Flink application (commonly 'Application')."
-  default     = "Application"
-}
-
 variable "dashboard_json_path" {
   type        = string
   description = "Path to cloudwatch_dashboard.json template file."

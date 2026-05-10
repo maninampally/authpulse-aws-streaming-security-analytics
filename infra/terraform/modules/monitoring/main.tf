@@ -2,17 +2,9 @@ locals {
   dashboard_template_raw = file(var.dashboard_json_path)
 
   dashboard_body = replace(
-    replace(
-      replace(
-        replace(local.dashboard_template_raw, "__REGION__", var.aws_region),
-        "__STREAM_NAME__",
-        var.kinesis_stream_name
-      ),
-      "__FLINK_APP_NAME__",
-      var.flink_application_name
-    ),
-    "__FLINK_NAMESPACE__",
-    var.flink_metrics_namespace
+    replace(local.dashboard_template_raw, "__REGION__", var.aws_region),
+    "__STREAM_NAME__",
+    var.kinesis_stream_name
   )
 }
 
@@ -99,46 +91,6 @@ resource "aws_cloudwatch_metric_alarm" "kinesis_incoming_records_too_low" {
 
   dimensions = {
     StreamName = var.kinesis_stream_name
-  }
-
-  alarm_actions = [aws_sns_topic.alerts.arn]
-  ok_actions    = [aws_sns_topic.alerts.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "flink_failed_checkpoints_rate" {
-  count = var.flink_application_name != "" ? 1 : 0
-
-  alarm_name        = "${var.name_prefix}-flink-failed-checkpoints-rate"
-  alarm_description = "Flink failed checkpoints increasing (RATE(numberOfFailedCheckpoints) > 0)"
-
-  comparison_operator = "GreaterThanThreshold"
-  threshold           = 0
-
-  evaluation_periods = 3
-  datapoints_to_alarm = 1
-
-  treat_missing_data = "notBreaching"
-
-  metric_query {
-    id          = "m1"
-    return_data = false
-
-    metric {
-      namespace   = var.flink_metrics_namespace
-      metric_name = "numberOfFailedCheckpoints"
-      period      = 60
-      stat        = "Sum"
-      dimensions = {
-        "${var.flink_application_dimension_name}" = var.flink_application_name
-      }
-    }
-  }
-
-  metric_query {
-    id          = "e1"
-    expression  = "RATE(m1)"
-    label       = "FailedCheckpointRate"
-    return_data = true
   }
 
   alarm_actions = [aws_sns_topic.alerts.arn]

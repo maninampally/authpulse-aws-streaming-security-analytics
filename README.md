@@ -10,7 +10,7 @@
 
 ---
 
-AuthPulse is a **production-grade, event-driven streaming analytics platform** on AWS that ingests enterprise authentication logs in real time, computes behavioral risk features per user, scores threats using a rule-based risk engine, and writes enriched results to an Apache Iceberg lakehouse queryable via Athena.
+AuthPulse is a **production-grade, event-driven streaming analytics platform** on AWS that ingests enterprise authentication logs in real time, computes behavioral risk features per user, scores threats using a rule-based risk engine, and writes enriched results to an S3 lakehouse queryable via Athena (with Iceberg DDL ready for the EMR batch path).
 
 > **Live pipeline:** LANL 708M+ event dataset replayed into Kinesis → Lambda consumer computes per-user sliding windows via DynamoDB → risk-scored output lands in S3 → queryable in Athena within ~42 seconds end-to-end.
 
@@ -71,7 +71,7 @@ Security teams need **real-time visibility** into authentication behavior to cat
 | **Catalog** | AWS Glue Data Catalog | Metadata for all Athena-queryable tables |
 | **Query** | Amazon Athena (engine v3) | Serverless SQL with partition projection |
 | **Visualization** | Amazon QuickSight | Security dashboards via SPICE |
-| **Batch / Backfill** | PySpark on Amazon EMR | Historical replay + Iceberg aggregation jobs |
+| **Batch / Backfill** | PySpark on Amazon EMR | Historical replay + Iceberg aggregation jobs *(code present, not deployed in dev)* |
 | **Infrastructure** | Terraform >= 1.5 | Full IaC — all AWS resources declared and versioned |
 | **Monitoring** | CloudWatch + SNS | Alarms on lag, error rate, risk spikes |
 
@@ -287,7 +287,7 @@ Kinesis record (base64)
 
 ### Stage 4 — Risk Scoring: Risk Engine
 
-`src/stream/risk_rules.py` is shared across Lambda, Flink, and Spark paths.
+`src/stream/risk_rules.py` is shared across Lambda (live) and Flink/Spark (reference implementations).
 
 Four deterministic rules with weighted scores:
 
@@ -320,7 +320,7 @@ risk_score = (lateral_movement × 35) + (burst_login × 25)
 `src/lambda_consumer/sink.py` writes JSONL.GZ to two S3 prefixes per batch:
 
 ```
-s3://authpulse-dev-lakehouse-<account>/
+s3://authpulse-dev-lakehouse/
 ├── raw/auth_events/
 │   └── event_date=YYYY-MM-DD/
 │       └── HHMMSS-<uuid8>.jsonl.gz     ← raw 5-field events
@@ -335,7 +335,7 @@ Both paths have Athena external tables with **partition projection** — no `MSC
 
 ## Risk Engine
 
-Full implementation in `src/stream/risk_rules.py`. The engine is pure Python with no external dependencies — used identically in Lambda, Spark, and Flink contexts.
+Full implementation in `src/stream/risk_rules.py`. The engine is pure Python with no external dependencies — production code path is Lambda; the same module is reused by the reference Spark and Flink implementations.
 
 ```python
 from src.stream.risk_rules import compute_risk
@@ -385,7 +385,9 @@ Rule thresholds and weights are configurable via `DEFAULT_RULE_CONFIG` dict — 
 | `risk_flags` | ARRAY\<STRING\> | Triggered rule IDs |
 | `event_date` | STRING | Partition column (YYYY-MM-DD) |
 
-### Iceberg Tables (Parquet — batch path)
+### Iceberg Tables (Parquet — batch path, DDL only)
+
+> **Note:** DDL is defined and registered in Glue, but tables are **not populated by the live Lambda path**. Population requires the EMR batch jobs in `src/batch/jobs/` (not deployed in dev). The Lambda path writes JSONL.GZ queryable via the JSON-backed external tables above.
 
 - `authpulse.auth_events` — full enriched event history
 - `authpulse.auth_events_curated` — curated with ACID guarantees
@@ -447,7 +449,7 @@ terraform apply tfplan
 
 **Resources created by `terraform apply`:**
 - Kinesis stream: `authpulse-dev-stream`
-- S3 bucket: `authpulse-dev-lakehouse-<account-id>`
+- S3 bucket: `authpulse-dev-lakehouse`
 - Lambda: `authpulse-dev-auth-processor`
 - DynamoDB: `authpulse-dev-user-state`
 - Glue DB: `authpulse`
@@ -568,7 +570,7 @@ python src/producer/replay_lanl.py \
 aws logs tail /aws/lambda/authpulse-dev-auth-processor --follow --region us-east-1
 
 # Check S3 output
-aws s3 ls s3://authpulse-dev-lakehouse-<account-id>/curated/auth_events_curated/ --recursive
+aws s3 ls s3://authpulse-dev-lakehouse/curated/auth_events_curated/ --recursive
 ```
 
 Expected Lambda log: `batch processed=8 failed=0`
@@ -737,8 +739,6 @@ AWS Lambda, Amazon Kinesis, Amazon DynamoDB, Apache Iceberg, AWS Glue, Amazon At
 - Lambda Provisioned Concurrency — eliminate cold starts for SLA-critical path
 - Kinesis Enhanced Fan-Out — dedicated 2MB/s throughput per consumer
 - Multi-shard scaling — auto-scale shards based on `IteratorAgeMilliseconds`
-- CI/CD — GitHub Actions pipeline for Lambda ZIP build + `terraform apply`
-
 ### Observability
 - OpenTelemetry distributed tracing — end-to-end latency attribution
 - Grafana dashboards — time-series visualization for operational metrics

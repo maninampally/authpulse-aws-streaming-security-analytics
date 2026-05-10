@@ -35,12 +35,12 @@ Target: iterator_age_ms < 60000  (1 minute)
 ```
 Source: CloudWatch Kinesis namespace, stream `authpulse-dev-stream`
 
-### 5. Flink Checkpoint Duration
+### 5. Lambda Invocation Duration
 ```
-checkpoint_duration_ms = lastCheckpointDuration  [ms]
-Target: checkpoint_duration_ms < 10000  (10 seconds)
+lambda_duration_ms = AWS/Lambda Duration P95  [ms]
+Target: lambda_duration_ms < 30000  (30 seconds — well below 60s timeout)
 ```
-Source: KDA v2 CloudWatch application metrics
+Source: CloudWatch `AWS/Lambda` namespace, function `authpulse-dev-auth-processor`
 
 ---
 
@@ -137,7 +137,7 @@ Risk Level:
 | Freshness (P95) | Athena Query 7 result | > 300s |
 | Invalid Record % | `AuthPulse/InvalidRecordRate` | > 0.1% |
 | Kinesis Iterator Age | `GetRecords.IteratorAgeMilliseconds` | > 60000 ms |
-| Flink Checkpoint Duration | KDA `lastCheckpointDuration` | > 10000 ms |
+| Lambda Duration (P95) | `AWS/Lambda Duration` | > 30000 ms |
 | Events / min | Kinesis `IncomingRecords` 1-min sum | — |
 | High-Risk Events / hr | Custom `AuthPulse/HighRiskCount` | > 500 |
 
@@ -167,6 +167,6 @@ Risk Level:
 | Freshness (P95) | Athena Query 7 result | > 300s |
 | Invalid Record % | `AuthPulse/InvalidRecordRate` | > 0.1% |
 | Kinesis Iterator Age | `GetRecords.IteratorAgeMilliseconds` | > 60000 ms |
-| Flink Checkpoint Duration | KDA `lastCheckpointDuration` | > 10000 ms |
+| Lambda Duration (P95) | `AWS/Lambda Duration` | > 30000 ms |
 | Events / min | Kinesis `IncomingRecords` 1-min sum | — |
 | High-Risk Events / hr | Custom `AuthPulse/HighRiskCount` | > 500 |

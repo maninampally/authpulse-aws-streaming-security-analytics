@@ -1,7 +1,5 @@
-"""
-Performance Tuning Configuration for AuthPulse
-Includes Iceberg, Spark, Flink, and EMR optimization parameters.
-"""
+# Performance Tuning Configuration for AuthPulse
+# Includes Iceberg, Lambda consumer, PySpark batch, and EMR optimization parameters.
 
 # ============================================================================
 # ICEBERG TABLE OPTIMIZATION
